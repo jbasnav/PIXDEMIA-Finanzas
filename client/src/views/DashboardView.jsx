@@ -366,7 +366,7 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Gráfico de Barras y Líneas Interactivo: Ingresos vs Gastos + Línea de Saldo */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3">
+        <div className="lg:col-span-2 min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center space-x-2">
@@ -382,8 +382,8 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport }) {
             </div>
           </div>
 
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-72 w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
               <ComposedChart 
                 data={evolucionMensual} 
                 margin={{ top: 12, right: 15, left: 15, bottom: 0 }}
@@ -439,7 +439,7 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport }) {
         </div>
 
         {/* Gráfico Donut: Distribución de Gastos */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm flex flex-col justify-between">
+        <div className="min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm flex flex-col justify-between">
           <div>
             <h3 className="font-bold text-base text-slate-900 dark:text-white">
               Distribución por Categorías
@@ -450,8 +450,8 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport }) {
           </div>
 
           {distribucionCategorias.length > 0 ? (
-            <div className="h-56 w-full my-2">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-56 w-full min-w-0 my-2">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
                 <PieChart>
                   <Pie
                     data={distribucionCategorias}
