@@ -172,6 +172,7 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport }) {
   const saldosCuentas = data?.saldosCuentas || [];
   const evolucionMensual = data?.evolucionMensual || [];
   const distribucionCategorias = data?.distribucionCategorias || [];
+  const matrizAnualTesoreria = data?.matrizAnualTesoreria || null;
 
   // Datos del mes seleccionado actualmente
   const currentMonthData = evolucionMensual.find(m => m.numMes === selectedMonthDetail) || {
