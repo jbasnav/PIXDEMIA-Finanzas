@@ -146,19 +146,18 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport }) {
     loadDashboardData();
   }, [year, month]);
 
-  // Cargar movimientos del mes seleccionado para la tabla inferior
+  // Cargar movimientos del mes seleccionado (o de todo el año si es null)
   const loadMonthMovements = async () => {
-    if (!selectedMonthDetail) return;
     try {
       setLoadingMovements(true);
       const res = await api.getMovimientos({
         ano: year,
-        mes: selectedMonthDetail,
-        limit: 500
+        mes: selectedMonthDetail || null,
+        limit: 1000
       });
       setMonthMovements(res.data || res.movimientos || []);
     } catch (err) {
-      console.error('Error cargando movimientos del mes:', err);
+      console.error('Error cargando movimientos:', err);
     } finally {
       setLoadingMovements(false);
     }
@@ -174,14 +173,22 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport }) {
   const distribucionCategorias = data?.distribucionCategorias || [];
   const matrizAnualTesoreria = data?.matrizAnualTesoreria || null;
 
-  // Datos del mes seleccionado actualmente
-  const currentMonthData = evolucionMensual.find(m => m.numMes === selectedMonthDetail) || {
-    mes: MONTH_NAMES_FULL[selectedMonthDetail - 1] || 'Ene',
-    ingresos: 0,
-    gastos: 0,
-    inversion: 0,
-    ahorro: 0
-  };
+  // Datos del mes seleccionado actualmente (o suma anual si no hay mes seleccionado)
+  const currentMonthData = selectedMonthDetail
+    ? (evolucionMensual.find(m => m.numMes === selectedMonthDetail) || {
+        mes: MONTH_NAMES_FULL[selectedMonthDetail - 1] || 'Ene',
+        ingresos: 0,
+        gastos: 0,
+        inversion: 0,
+        ahorro: 0
+      })
+    : {
+        mes: `Todo el Año ${year}`,
+        ingresos: evolucionMensual.reduce((acc, m) => acc + (m.ingresos || 0), 0),
+        gastos: evolucionMensual.reduce((acc, m) => acc + (m.gastos || 0), 0),
+        inversion: evolucionMensual.reduce((acc, m) => acc + (m.inversion || 0), 0),
+        ahorro: evolucionMensual.reduce((acc, m) => acc + (m.ahorro || 0), 0)
+      };
 
   // Obtener lista de bancos/cuentas disponibles (definido antes de cualquier return condicional)
   const availableBanks = React.useMemo(() => {
@@ -282,24 +289,49 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport }) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-            Tesorería Familiar 2026
+            Tesorería Familiar {year}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500">
             Control de liquidez, aislamiento estricto de traspasos y asignación patrimonial.
           </p>
         </div>
 
-        <div className="flex items-center space-x-2.5">
-          <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-            <Calendar className="w-4 h-4 text-slate-500 ml-2" />
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Selector de Año */}
+          <div className="flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800 py-1 px-2 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs">
+            <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             <select
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-              className="bg-transparent text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 px-2 py-1 focus:outline-none cursor-pointer"
+              value={year}
+              onChange={(e) => {
+                const newYear = Number(e.target.value);
+                setYear(newYear);
+              }}
+              className="bg-transparent text-xs sm:text-sm font-black text-slate-800 dark:text-slate-100 pr-1 focus:outline-none cursor-pointer"
+              aria-label="Seleccionar Año"
             >
-              <option value="">Todo el Año 2026</option>
+              <option value={2024} className="dark:bg-slate-900">Año 2024</option>
+              <option value={2025} className="dark:bg-slate-900">Año 2025</option>
+              <option value={2026} className="dark:bg-slate-900">Año 2026</option>
+              <option value={2027} className="dark:bg-slate-900">Año 2027</option>
+              <option value={2028} className="dark:bg-slate-900">Año 2028</option>
+            </select>
+          </div>
+
+          {/* Selector de Mes */}
+          <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800 py-1 px-2 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs">
+            <select
+              value={selectedMonthDetail || ''}
+              onChange={(e) => {
+                const val = e.target.value ? Number(e.target.value) : null;
+                setSelectedMonthDetail(val);
+                setMonth(e.target.value);
+              }}
+              className="bg-transparent text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 pr-1 focus:outline-none cursor-pointer"
+              aria-label="Seleccionar Mes"
+            >
+              <option value="" className="dark:bg-slate-900">Todo el Año {year}</option>
               {MONTHS.map(m => (
-                <option key={m.value} value={m.value}>{m.label}</option>
+                <option key={m.value} value={m.value} className="dark:bg-slate-900">{m.label}</option>
               ))}
             </select>
           </div>
@@ -356,7 +388,7 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport }) {
       <AnnualTreasuryMatrix 
         matrizData={matrizAnualTesoreria} 
         onSelectMonth={(m) => {
-          setSelectedMonthDetail(m);
+          setSelectedMonthDetail(prev => prev === m ? null : m);
           const el = document.getElementById('detalle-movimientos-section');
           if (el) el.scrollIntoView({ behavior: 'smooth' });
         }}
@@ -371,10 +403,10 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport }) {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center space-x-2">
-                <span>Evolución Financiera y Saldo 2026</span>
+                <span>Evolución Financiera y Saldo {year}</span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 flex items-center space-x-1">
                   <MousePointerClick className="w-3 h-3" />
-                  <span>Haz clic en una barra para inspeccionar mes</span>
+                  <span>Haz clic en una barra para inspeccionar o deseleccionar</span>
                 </span>
               </h3>
               <p className="text-xs text-slate-500">
@@ -392,7 +424,7 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport }) {
                   if (e && e.activePayload && e.activePayload.length > 0) {
                     const payload = e.activePayload[0].payload;
                     if (payload && payload.numMes) {
-                      setSelectedMonthDetail(payload.numMes);
+                      setSelectedMonthDetail(prev => prev === payload.numMes ? null : payload.numMes);
                     }
                   }
                 }}
@@ -544,13 +576,26 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport }) {
         {/* Cabecera del Mes Seleccionado */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
           <div>
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">
-                Mes Seleccionado
+                {selectedMonthDetail ? `Mes: ${MONTH_NAMES_FULL[selectedMonthDetail - 1]}` : `Todo el Año ${year}`}
               </span>
               <span className="text-xs text-slate-400 font-semibold">
                 Año {year}
               </span>
+              {selectedMonthDetail && (
+                <button
+                  onClick={() => {
+                    setSelectedMonthDetail(null);
+                    setMonth('');
+                  }}
+                  className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/60 text-slate-700 hover:text-rose-600 dark:text-slate-300 dark:hover:text-rose-300 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+                  title="Deseleccionar mes y ver todos los movimientos del año"
+                >
+                  <X className="w-3 h-3" />
+                  <span>Deseleccionar Mes (Ver todo el año)</span>
+                </button>
+              )}
               {categoryFilter && (
                 <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-indigo-600 text-white shadow-xs">
                   <span>Filtrado: {categoryFilter}</span>
@@ -565,10 +610,14 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport }) {
               )}
             </div>
             <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-1">
-              Detalle de Movimientos de {MONTH_NAMES_FULL[selectedMonthDetail - 1]}
+              {selectedMonthDetail 
+                ? `Detalle de Movimientos de ${MONTH_NAMES_FULL[selectedMonthDetail - 1]}` 
+                : `Detalle de Movimientos de Todo el Año ${year}`}
             </h2>
             <p className="text-xs text-slate-500">
-              Visualizando todos los ingresos y gastos reales que componen la barra seleccionada.
+              {selectedMonthDetail 
+                ? `Visualizando los movimientos de ${MONTH_NAMES_FULL[selectedMonthDetail - 1]}. Puedes hacer clic de nuevo en la barra o en "Deseleccionar Mes" para ver todo el año.` 
+                : `Visualizando todos los movimientos registrados en el ejercicio fiscal ${year}.`}
             </p>
           </div>
 
