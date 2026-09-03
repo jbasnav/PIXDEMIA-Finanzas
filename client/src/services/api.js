@@ -1,0 +1,343 @@
+const API_BASE = '/api';
+
+export const api = {
+  // Analytics & Dashboard
+  async getDashboard(year = 2026, month = null) {
+    const params = new URLSearchParams({ year });
+    if (month) params.append('month', month);
+    const res = await fetch(`${API_BASE}/analytics/dashboard?${params}`);
+    if (!res.ok) throw new Error('Error al cargar dashboard');
+    return res.json();
+  },
+
+  async getPresupuestos(year = 2026, month = null) {
+    const params = new URLSearchParams({ year });
+    if (month) params.append('month', month);
+    const res = await fetch(`${API_BASE}/analytics/presupuestos?${params}`);
+    if (!res.ok) throw new Error('Error al cargar presupuestos');
+    return res.json();
+  },
+
+  async savePresupuesto(data) {
+    const res = await fetch(`${API_BASE}/analytics/presupuestos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error('Error al guardar presupuesto');
+    return res.json();
+  },
+
+  // Cuentas
+  async getCuentas() {
+    const res = await fetch(`${API_BASE}/cuentas`);
+    if (!res.ok) throw new Error('Error al cargar cuentas');
+    return res.json();
+  },
+
+  async createCuenta(data) {
+    const res = await fetch(`${API_BASE}/cuentas`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error('Error al crear cuenta');
+    return res.json();
+  },
+
+  async updateCuenta(id, data) {
+    const res = await fetch(`${API_BASE}/cuentas/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error('Error al actualizar cuenta');
+    return res.json();
+  },
+
+  // Categorías
+  async getCategorias() {
+    const res = await fetch(`${API_BASE}/categorias`);
+    if (!res.ok) throw new Error('Error al cargar categorías');
+    return res.json();
+  },
+
+  async getTiendasHabituales() {
+    const res = await fetch(`${API_BASE}/categorias/tiendas-habituales`);
+    if (!res.ok) throw new Error('Error al cargar tiendas');
+    return res.json();
+  },
+
+  // Movimientos
+  async getMovimientos(filters = {}) {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== '') {
+        params.append(key, val);
+      }
+    });
+    const res = await fetch(`${API_BASE}/movimientos?${params}`);
+    if (!res.ok) throw new Error('Error al cargar movimientos');
+    return res.json();
+  },
+
+  async createMovimiento(data) {
+    const res = await fetch(`${API_BASE}/movimientos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al crear movimiento');
+    }
+    return res.json();
+  },
+
+  async updateMovimiento(id, data) {
+    const res = await fetch(`${API_BASE}/movimientos/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error('Error al actualizar movimiento');
+    return res.json();
+  },
+
+  async toggleConsolidado(id) {
+    const res = await fetch(`${API_BASE}/movimientos/${id}/toggle-consolidado`, {
+      method: 'PATCH'
+    });
+    if (!res.ok) throw new Error('Error al cambiar estado de consolidación');
+    return res.json();
+  },
+
+  async deleteMovimiento(id) {
+    const res = await fetch(`${API_BASE}/movimientos/${id}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) throw new Error('Error al eliminar movimiento');
+    return res.json();
+  },
+
+  async getProyectosResumen() {
+    const res = await fetch(`${API_BASE}/movimientos/proyectos-resumen`);
+    if (!res.ok) throw new Error('Error al cargar proyectos');
+    return res.json();
+  },
+
+  // Pasivos y Préstamos
+  async getPasivos() {
+    const res = await fetch(`${API_BASE}/pasivos`);
+    if (!res.ok) throw new Error('Error al cargar pasivos');
+    return res.json();
+  },
+
+  async createPasivo(data) {
+    const res = await fetch(`${API_BASE}/pasivos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al crear pasivo');
+    }
+    return res.json();
+  },
+
+  async updatePasivo(id, data) {
+    const res = await fetch(`${API_BASE}/pasivos/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al actualizar pasivo');
+    }
+    return res.json();
+  },
+
+  async deletePasivo(id) {
+    const res = await fetch(`${API_BASE}/pasivos/${id}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) throw new Error('Error al eliminar pasivo');
+    return res.json();
+  },
+
+  async simularEscenarioPasivo(data) {
+    const res = await fetch(`${API_BASE}/pasivos/simular-escenario`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error('Error al simular escenario');
+    return res.json();
+  },
+
+  async simularNuevoCredito(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') {
+        query.append(k, v);
+      }
+    });
+    const res = await fetch(`${API_BASE}/pasivos/simulador-nuevo-credito?${query.toString()}`);
+    if (!res.ok) throw new Error('Error al calcular simulación de nuevo crédito');
+    return res.json();
+  },
+
+  async simularFurgoneta(params = {}) {
+    return this.simularNuevoCredito(params);
+  },
+
+  async consultarEuriborHistorico(params = {}) {
+    const query = new URLSearchParams(params);
+    const res = await fetch(`${API_BASE}/pasivos/consultar-euribor-historico?${query}`);
+    if (!res.ok) throw new Error('Error al consultar Euríbor histórico');
+    return res.json();
+  },
+
+  async getCuadroVida(id) {
+    const res = await fetch(`${API_BASE}/pasivos/${id}/cuadro-vida`);
+    if (!res.ok) throw new Error('Error al cargar cuadro de amortización');
+    return res.json();
+  },
+
+  // Suscripciones y Servicios Digitales
+  async getSuscripciones() {
+    const res = await fetch(`${API_BASE}/suscripciones`);
+    if (!res.ok) throw new Error('Error al cargar suscripciones');
+    return res.json();
+  },
+
+  async createSuscripcion(data) {
+    const res = await fetch(`${API_BASE}/suscripciones`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error('Error al crear suscripción');
+    return res.json();
+  },
+
+  async updateSuscripcion(id, data) {
+    const res = await fetch(`${API_BASE}/suscripciones/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error('Error al actualizar suscripción');
+    return res.json();
+  },
+
+  async deleteSuscripcion(id) {
+    const res = await fetch(`${API_BASE}/suscripciones/${id}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) throw new Error('Error al eliminar suscripción');
+    return res.json();
+  },
+
+  // Alimentación, Menús y Precios
+  async getAlimentacionDashboard() {
+    const res = await fetch(`${API_BASE}/alimentacion/dashboard`);
+    if (!res.ok) throw new Error('Error al cargar datos de alimentación');
+    return res.json();
+  },
+
+  async getProductosAlimentacion() {
+    const res = await fetch(`${API_BASE}/alimentacion/productos`);
+    if (!res.ok) throw new Error('Error al cargar productos de alimentación');
+    return res.json();
+  },
+
+  async createProductoAlimentacion(data) {
+    const res = await fetch(`${API_BASE}/alimentacion/productos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error('Error al crear producto');
+    return res.json();
+  },
+
+  async registrarPrecioComercio(data) {
+    const res = await fetch(`${API_BASE}/alimentacion/precios`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error('Error al registrar precio');
+    return res.json();
+  },
+
+  async getHistoricoPrecios(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') query.append(k, v);
+    });
+    const res = await fetch(`${API_BASE}/alimentacion/historico-precios?${query.toString()}`);
+    if (!res.ok) throw new Error('Error al cargar histórico de precios');
+    return res.json();
+  },
+
+  async getMenusPlanificados() {
+    const res = await fetch(`${API_BASE}/alimentacion/menus`);
+    if (!res.ok) throw new Error('Error al cargar menús planificados');
+    return res.json();
+  },
+
+  async createMenuPlanificado(data) {
+    const res = await fetch(`${API_BASE}/alimentacion/menus`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error('Error al crear menú');
+    return res.json();
+  },
+
+  async updateMenuPlanificado(id, data) {
+    const res = await fetch(`${API_BASE}/alimentacion/menus/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error('Error al actualizar menú');
+    return res.json();
+  },
+
+  async getPersonasHogar() {
+    const res = await fetch(`${API_BASE}/alimentacion/personas`);
+    if (!res.ok) throw new Error('Error al cargar personas del hogar');
+    return res.json();
+  },
+
+  async createPersonaHogar(data) {
+    const res = await fetch(`${API_BASE}/alimentacion/personas`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error('Error al agregar persona');
+    return res.json();
+  },
+
+  // Importación de Excel
+  async uploadExcel(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${API_BASE}/import-excel`, {
+      method: 'POST',
+      body: formData
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al importar archivo Excel');
+    }
+    return res.json();
+  }
+};
