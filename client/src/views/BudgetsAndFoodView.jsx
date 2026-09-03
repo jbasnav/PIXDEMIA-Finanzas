@@ -260,13 +260,17 @@ export default function BudgetsAndFoodView() {
     setEditingDayKey(diaKey);
     const existing = selectedMenu.detalles?.[diaKey] || {
       comida: '',
+      comidaSegundo: '',
       cena: '',
+      cenaSegundo: '',
       ingredientesComida: [],
       ingredientesCena: []
     };
     setEditingDayData({
       comida: existing.comida || '',
+      comidaSegundo: existing.comidaSegundo || '',
       cena: existing.cena || '',
+      cenaSegundo: existing.cenaSegundo || '',
       ingredientesComida: existing.ingredientesComida ? [...existing.ingredientesComida] : [],
       ingredientesCena: existing.ingredientesCena ? [...existing.ingredientesCena] : []
     });
@@ -280,7 +284,9 @@ export default function BudgetsAndFoodView() {
       ...(selectedMenu.detalles || {}),
       [editingDayKey]: {
         comida: editingDayData.comida,
+        comidaSegundo: editingDayData.comidaSegundo || '',
         cena: editingDayData.cena,
+        cenaSegundo: editingDayData.cenaSegundo || '',
         ingredientesComida: editingDayData.ingredientesComida,
         ingredientesCena: editingDayData.ingredientesCena
       }
@@ -755,6 +761,12 @@ export default function BudgetsAndFoodView() {
                           <p className="font-bold text-slate-800 dark:text-slate-200 text-xs leading-snug mt-0.5">
                             {d.comida || 'Sin planificar'}
                           </p>
+                          {d.comidaSegundo && (
+                            <p className="font-semibold text-amber-700 dark:text-amber-300 text-[11px] leading-snug mt-0.5 flex items-start space-x-1">
+                              <span className="opacity-60 font-black">+</span>
+                              <span>{d.comidaSegundo}</span>
+                            </p>
+                          )}
                           {d.ingredientesComida?.length > 0 && (
                             <span className="text-[9px] text-slate-400 block mt-0.5">
                               {d.ingredientesComida.length} producto(s) vinculado(s)
@@ -770,6 +782,12 @@ export default function BudgetsAndFoodView() {
                           <p className="font-bold text-slate-700 dark:text-slate-300 text-xs leading-snug mt-0.5">
                             {d.cena || 'Sin planificar'}
                           </p>
+                          {d.cenaSegundo && (
+                            <p className="font-semibold text-indigo-700 dark:text-indigo-300 text-[11px] leading-snug mt-0.5 flex items-start space-x-1">
+                              <span className="opacity-60 font-black">+</span>
+                              <span>{d.cenaSegundo}</span>
+                            </p>
+                          )}
                           {d.ingredientesCena?.length > 0 && (
                             <span className="text-[9px] text-slate-400 block mt-0.5">
                               {d.ingredientesCena.length} producto(s) vinculado(s)
@@ -1021,13 +1039,33 @@ export default function BudgetsAndFoodView() {
                 </button>
               </div>
 
-              <input
-                type="text"
-                placeholder="Nombre del plato (Ej: Pechuga de pollo a la plancha con ensalada)"
-                value={editingDayData.comida}
-                onChange={(e) => setEditingDayData({ ...editingDayData, comida: e.target.value })}
-                className="w-full px-3 py-2 text-xs font-bold rounded-xl bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 text-slate-900 dark:text-white"
-              />
+              <div className="space-y-2">
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-amber-800 dark:text-amber-300 block mb-1">
+                    1er Plato
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Primer plato (Ej: Lentejas caseras con verdura, Ensalada de pasta...)"
+                    value={editingDayData.comida}
+                    onChange={(e) => setEditingDayData({ ...editingDayData, comida: e.target.value })}
+                    className="w-full px-3 py-2 text-xs font-bold rounded-xl bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-amber-800 dark:text-amber-300 block mb-1">
+                    2º Plato / Acompañamiento / Postre
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Segundo plato opcional (Ej: Filete de ternera, Pescado a la plancha, Fruta...)"
+                    value={editingDayData.comidaSegundo || ''}
+                    onChange={(e) => setEditingDayData({ ...editingDayData, comidaSegundo: e.target.value })}
+                    className="w-full px-3 py-2 text-xs font-bold rounded-xl bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 text-slate-900 dark:text-white placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
 
               {/* LISTA DE INGREDIENTES COMIDA */}
               {editingDayData.ingredientesComida?.length > 0 && (
@@ -1095,13 +1133,33 @@ export default function BudgetsAndFoodView() {
                 </button>
               </div>
 
-              <input
-                type="text"
-                placeholder="Nombre del plato de cena (Ej: Crema de verduras y tortilla)"
-                value={editingDayData.cena}
-                onChange={(e) => setEditingDayData({ ...editingDayData, cena: e.target.value })}
-                className="w-full px-3 py-2 text-xs font-bold rounded-xl bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 text-slate-900 dark:text-white"
-              />
+              <div className="space-y-2">
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-indigo-800 dark:text-indigo-300 block mb-1">
+                    1er Plato
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Primer plato de cena (Ej: Crema de verduras, Sopa...)"
+                    value={editingDayData.cena}
+                    onChange={(e) => setEditingDayData({ ...editingDayData, cena: e.target.value })}
+                    className="w-full px-3 py-2 text-xs font-bold rounded-xl bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-indigo-800 dark:text-indigo-300 block mb-1">
+                    2º Plato / Acompañamiento / Postre
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Segundo plato de cena opcional (Ej: Pechuga de pollo a la plancha, Tortilla francesa...)"
+                    value={editingDayData.cenaSegundo || ''}
+                    onChange={(e) => setEditingDayData({ ...editingDayData, cenaSegundo: e.target.value })}
+                    className="w-full px-3 py-2 text-xs font-bold rounded-xl bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 text-slate-900 dark:text-white placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
 
               {/* LISTA DE INGREDIENTES CENA */}
               {editingDayData.ingredientesCena?.length > 0 && (
