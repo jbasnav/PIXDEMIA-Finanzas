@@ -321,7 +321,8 @@ function simularEscenarioPasivo({
   modalidadAmortizacion = 'reducir_plazo', // 'reducir_plazo' o 'reducir_cuota'
   nuevoInteresAnual = null,
   esViviendaHabitual = false,
-  regimenFiscal = 'general' // 'general' (15% hasta 9040€) o 'pais_vasco' (18% hasta 8500€)
+  regimenFiscal = 'general', // 'general' (15% hasta 9040€/titular) o 'pais_vasco' (18% hasta 8500€/titular)
+  numeroTitulares = 1 // 1 o 2 titulares
 }) {
   const cap = Math.max(0, Number(capitalPendiente));
   const intOriginal = Number(interesAnual);
@@ -329,6 +330,7 @@ function simularEscenarioPasivo({
   const cuotaOrig = Number(cuotaMensual);
   const mesesOrig = Number(mesesRestantes);
   const extra = Math.max(0, Number(amortizacionExtra));
+  const titulares = Math.max(1, parseInt(numeroTitulares) || 1);
 
   // 1. Escenario Original
   const scheduleOriginal = calcularAmortizacion(cap, intOriginal, mesesOrig, cuotaOrig);
@@ -374,19 +376,25 @@ function simularEscenarioPasivo({
   const ahorroCuotaMensual = Math.max(0, cuotaOrig - cuotaSimulada);
 
   // 3. Cálculo de Desgravación Fiscal Hacienda (IRPF)
+  const baseLimiteIndividual = regimenFiscal === 'pais_vasco' ? 8500 : 9040;
+  const baseMaximaDeducible = baseLimiteIndividual * titulares;
+  const tipoDeduccionPct = regimenFiscal === 'pais_vasco' ? 18.0 : 15.0;
+
   let desgravacion = {
     aplica: esViviendaHabitual,
+    numeroTitulares: titulares,
+    baseIndividual: baseLimiteIndividual,
     baseAnualAportada: 0,
-    baseMaximaDeducible: regimenFiscal === 'pais_vasco' ? 8500 : 9040,
-    tipoDeduccionPct: regimenFiscal === 'pais_vasco' ? 18.0 : 15.0,
+    baseMaximaDeducible,
+    tipoDeduccionPct,
     ahorroFiscalAnual: 0,
-    maximoAhorroFiscalPosible: regimenFiscal === 'pais_vasco' ? (8500 * 0.18) : (9040 * 0.15)
+    maximoAhorroFiscalPosible: baseMaximaDeducible * (tipoDeduccionPct / 100)
   };
 
   if (esViviendaHabitual) {
     const aportacionAnualTotal = (cuotaOrig * 12) + extra;
-    const baseComputable = Math.min(aportacionAnualTotal, desgravacion.baseMaximaDeducible);
-    const ahorroIRPF = baseComputable * (desgravacion.tipoDeduccionPct / 100);
+    const baseComputable = Math.min(aportacionAnualTotal, baseMaximaDeducible);
+    const ahorroIRPF = baseComputable * (tipoDeduccionPct / 100);
 
     desgravacion.baseAnualAportada = Number(aportacionAnualTotal.toFixed(2));
     desgravacion.baseComputable = Number(baseComputable.toFixed(2));

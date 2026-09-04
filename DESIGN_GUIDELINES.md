@@ -116,3 +116,19 @@ Este documento establece las reglas visuales, de maquetación y de tipografía p
 * **Formatos**: Descarga directa de base de datos SQLite `.db`, exportación completa en formato JSON y gestión de snapshots locales en el servidor.
 * **Seguridad pre-restauración**: Antes de restaurar cualquier copia, se genera automáticamente una instantánea de seguridad previa de respaldo.
 
+---
+
+## 12. 📑 Optimización Fiscal de Hipotecas y Cotitularidad (Deducción IRPF)
+* **Tope computable por titular**:
+  * **País Vasco (Gipuzkoa, Bizkaia, Araba)**: 18% general hasta **8.500 €/año por titular** (máximo 1.530 € de deducción en cuota IRPF).
+  * **Régimen Estatal (AEAT)**: 15% general hasta **9.040 €/año por titular** (máximo 1.356 € de deducción en cuota IRPF).
+* **Multiplicador por Cotitulares (1 vs 2)**:
+  * Al indicar **2 cotitulares** (tributación individual), la base anual computable máxima deducible de la hipoteca se multiplica por 2:
+    * **País Vasco**: **17.000 €/año** (hasta **3.060 €** de devolución).
+    * **Régimen Estatal**: **18.080 €/año** (hasta **2.712 €** de devolución).
+* **Cálculo del Tope Óptimo de Amortización**:
+  * Descuenta de forma exacta las 12 cuotas anuales ordinarias ya abonadas:
+    $$\text{Tope Óptimo Extraordinario} = \max\Big(0, (\text{Base Límite} \times \text{Nº Titulares}) - (\text{Cuota Mensual} \times 12)\Big)$$
+  * Esto garantiza que los botones rápidos de amortización nunca recomienden aportar más dinero del que realmente desgrava en la declaración de la Renta.
+
+

@@ -48,7 +48,7 @@ router.get('/', (req, res) => {
       SELECT id, nombre, capital_inicial, capital_pendiente, cuota_mensual,
              interes_nominal_anual, tipo_interes_modalidad, diferencial_euribor,
              historial_intereses_json, mes_revision, frecuencia_revision, proxima_revision_fecha,
-             fecha_inicio, fecha_fin_prevista, fecha_actualizacion_saldo, tipo, notas, created_at
+             fecha_inicio, fecha_fin_prevista, fecha_actualizacion_saldo, tipo, numero_titulares, notas, created_at
       FROM prestamos_y_pasivos
       ORDER BY id ASC
     `).all();
@@ -128,7 +128,8 @@ router.post('/simular-escenario', (req, res) => {
       modalidadAmortizacion = 'reducir_plazo',
       nuevoInteresAnual = null,
       esViviendaHabitual = false,
-      regimenFiscal = 'general'
+      regimenFiscal = 'general',
+      numeroTitulares = 1
     } = req.body;
 
     const resultado = simularEscenarioPasivo({
@@ -140,7 +141,8 @@ router.post('/simular-escenario', (req, res) => {
       modalidadAmortizacion,
       nuevoInteresAnual,
       esViviendaHabitual,
-      regimenFiscal
+      regimenFiscal,
+      numeroTitulares
     });
 
     res.json(resultado);
@@ -336,6 +338,7 @@ router.post('/', (req, res) => {
       fecha_fin_prevista,
       fecha_actualizacion_saldo,
       tipo = 'personal',
+      numero_titulares = 1,
       notas = ''
     } = req.body;
 
@@ -352,8 +355,8 @@ router.post('/', (req, res) => {
         nombre, capital_inicial, capital_pendiente, cuota_mensual,
         interes_nominal_anual, tipo_interes_modalidad, diferencial_euribor, indice_referencia,
         historial_intereses_json, mes_revision, frecuencia_revision, proxima_revision_fecha,
-        fecha_inicio, fecha_fin_prevista, fecha_actualizacion_saldo, tipo, notas
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        fecha_inicio, fecha_fin_prevista, fecha_actualizacion_saldo, tipo, numero_titulares, notas
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const info = stmt.run(
@@ -373,6 +376,7 @@ router.post('/', (req, res) => {
       fecha_fin_prevista || null,
       fecha_actualizacion_saldo || new Date().toISOString().split('T')[0],
       tipo,
+      Number(numero_titulares) || 1,
       notas
     );
 
@@ -403,6 +407,7 @@ router.put('/:id', (req, res) => {
       fecha_fin_prevista,
       fecha_actualizacion_saldo,
       tipo,
+      numero_titulares,
       notas
     } = req.body;
 
@@ -428,6 +433,7 @@ router.put('/:id', (req, res) => {
           fecha_fin_prevista = COALESCE(?, fecha_fin_prevista),
           fecha_actualizacion_saldo = COALESCE(?, fecha_actualizacion_saldo),
           tipo = COALESCE(?, tipo),
+          numero_titulares = COALESCE(?, numero_titulares),
           notas = COALESCE(?, notas)
       WHERE id = ?
     `);
@@ -449,6 +455,7 @@ router.put('/:id', (req, res) => {
       fecha_fin_prevista,
       fecha_actualizacion_saldo,
       tipo,
+      numero_titulares !== undefined ? Number(numero_titulares) : null,
       notas,
       req.params.id
     );

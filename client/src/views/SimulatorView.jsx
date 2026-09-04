@@ -111,6 +111,7 @@ export default function SimulatorView() {
   const [nuevoInteresAmort, setNuevoInteresAmort] = useState('');
   const [esViviendaHabitual, setEsViviendaHabitual] = useState(true);
   const [regimenFiscal, setRegimenFiscal] = useState('pais_vasco'); // 'pais_vasco' | 'general'
+  const [numeroTitulares, setNumeroTitulares] = useState(1); // 1 | 2 titulares
   const [escenarioResult, setEscenarioResult] = useState(null);
 
   // Cuentas y Modal de Aplicación Real de Amortización Anticipada
@@ -130,6 +131,7 @@ export default function SimulatorView() {
     presetId: 'hipoteca',
     nombre: 'Hipoteca Santander',
     tipo: 'hipoteca',
+    numero_titulares: 1,
     fecha_inicio: '2015-07-01',
     fecha_fin_prevista: '2030-06-30',
     fecha_actualizacion_saldo: new Date().toISOString().split('T')[0],
@@ -199,6 +201,19 @@ export default function SimulatorView() {
     loadPasivos();
   }, []);
 
+  // Sincronizar titulares y régimen fiscal al cambiar de pasivo seleccionado
+  useEffect(() => {
+    if (selectedPasivoId && pasivos.length > 0) {
+      const cur = pasivos.find(p => p.id === Number(selectedPasivoId));
+      if (cur) {
+        setNumeroTitulares(Number(cur.numero_titulares) || 1);
+        if (cur.tipo === 'hipoteca') {
+          setEsViviendaHabitual(true);
+        }
+      }
+    }
+  }, [selectedPasivoId, pasivos]);
+
   const toggleExpandHistory = (id) => {
     setExpandedHistories(prev => ({
       ...prev,
@@ -224,7 +239,8 @@ export default function SimulatorView() {
           modalidadAmortizacion: modalidadAmort,
           nuevoInteresAnual: nuevoInteresAmort !== '' ? Number(nuevoInteresAmort) : Number(current.interes_nominal_anual),
           esViviendaHabitual: current.tipo === 'hipoteca' ? esViviendaHabitual : false,
-          regimenFiscal
+          regimenFiscal,
+          numeroTitulares: Number(numeroTitulares) || 1
         };
         const res = await api.simularEscenarioPasivo(payload);
         setEscenarioResult(res);
@@ -236,7 +252,7 @@ export default function SimulatorView() {
     };
 
     runSimulation();
-  }, [selectedPasivoId, amortizacionExtra, modalidadAmort, nuevoInteresAmort, esViviendaHabitual, regimenFiscal, pasivos]);
+  }, [selectedPasivoId, amortizacionExtra, modalidadAmort, nuevoInteresAmort, esViviendaHabitual, regimenFiscal, numeroTitulares, pasivos]);
 
   // ========================================================
   // CÁLCULOS MATEMÁTICOS BIDIRECCIONALES & TRAYECTORIA HISTÓRICA
@@ -663,6 +679,7 @@ export default function SimulatorView() {
       presetId: p.tipo,
       nombre: p.nombre,
       tipo: p.tipo || 'personal',
+      numero_titulares: Number(p.numero_titulares) || 1,
       fecha_inicio: p.fecha_inicio || '',
       fecha_fin_prevista: p.fecha_fin_prevista || '',
       fecha_actualizacion_saldo: p.fecha_actualizacion_saldo || new Date().toISOString().split('T')[0],
@@ -814,6 +831,7 @@ export default function SimulatorView() {
         interes_nominal_anual: isCero ? 0 : Number(formUnified.interes_nominal_anual),
         diferencial_euribor: isCero ? 0 : Number(formUnified.diferencial_euribor),
         indice_referencia: isCero ? '' : (formUnified.indice_referencia || 'Euríbor 12M'),
+        numero_titulares: Number(formUnified.numero_titulares) || 1,
         historial_intereses_json: isCero ? '[]' : JSON.stringify(formUnified.historialIntereses)
       };
 
@@ -889,8 +907,10 @@ export default function SimulatorView() {
 
   // Cuotas anuales base y cálculo óptimo para deducción en IRPF (País Vasco y Estatal)
   const cuotasAnualesBase = Math.round((Number(currentSelectedPasivo?.cuota_mensual) || 0) * 12);
-  const topeOptimoPV = Math.max(0, 8500 - cuotasAnualesBase);
-  const topeOptimoEstatal = Math.max(0, 9040 - cuotasAnualesBase);
+  const baseLimitePV = 8500 * (Number(numeroTitulares) || 1);
+  const baseLimiteEstatal = 9040 * (Number(numeroTitulares) || 1);
+  const topeOptimoPV = Math.max(0, baseLimitePV - cuotasAnualesBase);
+  const topeOptimoEstatal = Math.max(0, baseLimiteEstatal - cuotasAnualesBase);
 
   const chartDataAmort = [];
   if (escenarioResult && escenarioResult.original && escenarioResult.simulado) {
@@ -1179,7 +1199,7 @@ export default function SimulatorView() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Nombre del Préstamo</label>
                   <input
@@ -1203,6 +1223,18 @@ export default function SimulatorView() {
                     <option value="familiar">Préstamo Familiar / Amigos</option>
                     <option value="personal">Préstamo Personal / Vehículo</option>
                     <option value="simulacion">Simulación</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Titulares (IRPF)</label>
+                  <select
+                    value={formUnified.numero_titulares || 1}
+                    onChange={(e) => setFormUnified({ ...formUnified, numero_titulares: Number(e.target.value) || 1 })}
+                    className="w-full px-3.5 py-2 text-sm rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium"
+                  >
+                    <option value={1}>1 Titular (8.500 €)</option>
+                    <option value={2}>2 Cotitulares (17.000 €)</option>
                   </select>
                 </div>
               </div>
@@ -2245,7 +2277,7 @@ export default function SimulatorView() {
                           type="button"
                           onClick={() => setAmortizacionExtra(topeOptimoPV)}
                           className="px-2.5 py-0.5 text-[11px] font-bold rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 hover:bg-amber-200 border border-amber-300 dark:border-amber-700 transition-colors"
-                          title={`Tope PV: 8.500 € menos ${cuotasAnualesBase.toLocaleString('es-ES')} € de cuotas anuales = ${topeOptimoPV.toLocaleString('es-ES')} €`}
+                          title={`Tope PV: ${baseLimitePV.toLocaleString('es-ES')} € (${numeroTitulares} titular${numeroTitulares > 1 ? 'es' : ''}) menos ${cuotasAnualesBase.toLocaleString('es-ES')} € cuotas anuales = ${topeOptimoPV.toLocaleString('es-ES')} €`}
                         >
                           🎯 Tope PV ({topeOptimoPV.toLocaleString('es-ES')} €)
                         </button>
@@ -2256,7 +2288,7 @@ export default function SimulatorView() {
                           type="button"
                           onClick={() => setAmortizacionExtra(topeOptimoEstatal)}
                           className="px-2.5 py-0.5 text-[11px] font-bold rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-300 transition-colors"
-                          title={`Tope Estatal: 9.040 € menos ${cuotasAnualesBase.toLocaleString('es-ES')} € de cuotas anuales = ${topeOptimoEstatal.toLocaleString('es-ES')} €`}
+                          title={`Tope Estatal: ${baseLimiteEstatal.toLocaleString('es-ES')} € (${numeroTitulares} titular${numeroTitulares > 1 ? 'es' : ''}) menos ${cuotasAnualesBase.toLocaleString('es-ES')} € cuotas anuales = ${topeOptimoEstatal.toLocaleString('es-ES')} €`}
                         >
                           🎯 Tope Estatal ({topeOptimoEstatal.toLocaleString('es-ES')} €)
                         </button>
@@ -2264,7 +2296,7 @@ export default function SimulatorView() {
                     </div>
                     {cuotasAnualesBase > 0 && (
                       <p className="text-[10px] text-slate-400">
-                        * Los botones de Tope IRPF ya descuentan tus {formatCurrency(cuotasAnualesBase)} de cuotas anuales ordinarias.
+                        * Los botones de Tope IRPF ya descuentan tus {formatCurrency(cuotasAnualesBase)} de cuotas anuales ({numeroTitulares} titular{numeroTitulares > 1 ? 'es' : ''} = {formatCurrency(regimenFiscal === 'pais_vasco' ? baseLimitePV : baseLimiteEstatal)} de base máxima).
                       </p>
                     )}
                   </div>
@@ -2327,7 +2359,7 @@ export default function SimulatorView() {
                   </div>
 
                   {/* 4. Módulo Fiscal Hacienda / IRPF */}
-                  <div className="p-4 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 space-y-2">
+                  <div className="p-4 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 space-y-2.5">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-bold uppercase text-amber-800 dark:text-amber-300 flex items-center space-x-1">
                         <Receipt className="w-3.5 h-3.5" />
@@ -2340,17 +2372,61 @@ export default function SimulatorView() {
                         className="rounded accent-amber-600 w-4 h-4 cursor-pointer"
                       />
                     </div>
-                    <select
-                      disabled={!esViviendaHabitual}
-                      value={regimenFiscal}
-                      onChange={(e) => setRegimenFiscal(e.target.value)}
-                      className="w-full px-2 py-1.5 text-xs font-semibold rounded bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 text-slate-900 dark:text-white disabled:opacity-50"
-                    >
-                      <option value="pais_vasco">País Vasco / Bizkaia (18% hasta 8.500€)</option>
-                      <option value="general">Régimen Estatal (15% hasta 9.040€)</option>
-                    </select>
+
+                    <div className="space-y-1">
+                      <select
+                        disabled={!esViviendaHabitual}
+                        value={regimenFiscal}
+                        onChange={(e) => setRegimenFiscal(e.target.value)}
+                        className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 text-slate-900 dark:text-white disabled:opacity-50"
+                      >
+                        <option value="pais_vasco">País Vasco / Bizkaia (18% deducción)</option>
+                        <option value="general">Régimen Estatal AEAT (15% deducción)</option>
+                      </select>
+                    </div>
+
+                    {/* Selector de Titulares */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase text-slate-500">Titulares Hipoteca</span>
+                        <span className="text-[10px] font-black text-amber-800 dark:text-amber-300">
+                          {regimenFiscal === 'pais_vasco' ? `${(8500 * numeroTitulares).toLocaleString('es-ES')} € max` : `${(9040 * numeroTitulares).toLocaleString('es-ES')} € max`}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1">
+                        <button
+                          type="button"
+                          disabled={!esViviendaHabitual}
+                          onClick={() => setNumeroTitulares(1)}
+                          className={`py-1 px-1.5 rounded-lg text-[11px] font-bold text-center transition-all ${
+                            numeroTitulares === 1
+                              ? 'bg-amber-600 text-white shadow-sm'
+                              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-amber-200 dark:border-amber-800/60'
+                          } disabled:opacity-50`}
+                        >
+                          1 Titular
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!esViviendaHabitual}
+                          onClick={() => setNumeroTitulares(2)}
+                          className={`py-1 px-1.5 rounded-lg text-[11px] font-bold text-center transition-all ${
+                            numeroTitulares === 2
+                              ? 'bg-amber-600 text-white shadow-sm'
+                              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-amber-200 dark:border-amber-800/60'
+                          } disabled:opacity-50`}
+                        >
+                          2 Cotitulares (2x)
+                        </button>
+                      </div>
+                    </div>
+
                     <p className="text-[10px] text-amber-700/80 dark:text-amber-400">
-                      {esViviendaHabitual ? 'Devolución fiscal en la declaración de la Renta.' : 'Desactivado para este préstamo.'}
+                      {esViviendaHabitual 
+                        ? (numeroTitulares === 2 
+                            ? 'Al tener 2 cotitulares el límite fiscal conjunto se duplica (hasta 17.000 €/año).' 
+                            : 'Límite anual computado para 1 titular individual.')
+                        : 'Desactivado para este préstamo.'}
                     </p>
                   </div>
 
@@ -2394,13 +2470,20 @@ export default function SimulatorView() {
 
                 {/* Devolución Hacienda IRPF */}
                 <div className="p-5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50">
-                  <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">Retorno Fiscal IRPF (Hacienda)</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">Retorno Fiscal IRPF (Hacienda)</span>
+                    {esViviendaHabitual && (
+                      <span className="px-1.5 py-0.5 text-[9px] font-black rounded-full bg-amber-200 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200">
+                        {numeroTitulares} {numeroTitulares > 1 ? 'Titulares (2x)' : 'Titular'}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">
                     {esViviendaHabitual ? `+${formatCurrency(escenarioResult.desgravacionHacienda?.ahorroFiscalAnual || 0)}` : '0,00 €'}
                   </p>
                   <p className="text-[11px] text-slate-500 mt-1">
                     {esViviendaHabitual 
-                      ? `Deducción del ${escenarioResult.desgravacionHacienda?.tipoDeduccionPct || 18}% sobre ${formatCurrency(escenarioResult.desgravacionHacienda?.baseComputable || 0)} aportados` 
+                      ? `Deducción del ${escenarioResult.desgravacionHacienda?.tipoDeduccionPct || 18}% sobre ${formatCurrency(escenarioResult.desgravacionHacienda?.baseComputable || 0)} aportados (máx. ${formatCurrency(escenarioResult.desgravacionHacienda?.baseMaximaDeducible || 8500)})` 
                       : 'Préstamo no deducible en IRPF'}
                   </p>
                 </div>

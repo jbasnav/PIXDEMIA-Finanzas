@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS prestamos_y_pasivos (
     fecha_fin_prevista TEXT,
     fecha_actualizacion_saldo TEXT,
     tipo TEXT DEFAULT 'prestamo' CHECK (tipo IN ('hipoteca', 'personal', 'familiar', 'simulacion')),
+    numero_titulares INTEGER DEFAULT 1, -- 1 titular o 2 cotitulares (duplica deducción fiscal IRPF)
     notas TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

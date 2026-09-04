@@ -167,6 +167,7 @@ function initSchemaAndSeeds() {
     'ALTER TABLE prestamos_y_pasivos ADD COLUMN mes_revision TEXT DEFAULT "Julio"',
     'ALTER TABLE prestamos_y_pasivos ADD COLUMN frecuencia_revision TEXT DEFAULT "Anual"',
     'ALTER TABLE prestamos_y_pasivos ADD COLUMN proxima_revision_fecha TEXT',
+    'ALTER TABLE prestamos_y_pasivos ADD COLUMN numero_titulares INTEGER DEFAULT 1',
     'ALTER TABLE suscripciones_servicios ADD COLUMN logo_url TEXT',
     'ALTER TABLE movimientos ADD COLUMN es_consolidado INTEGER DEFAULT 1',
     'ALTER TABLE movimientos ADD COLUMN cuenta_imputada_id INTEGER',
