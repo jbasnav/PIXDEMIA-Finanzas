@@ -394,6 +394,7 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport, onOpenAcco
       {/* 2. Matriz Anual de Tesorería y Previsiones (Igual al Excel Principal) */}
       <AnnualTreasuryMatrix 
         matrizData={matrizAnualTesoreria} 
+        year={year}
         onSelectMonth={(m) => {
           setSelectedMonthDetail(prev => prev === m ? null : m);
           const el = document.getElementById('detalle-movimientos-section');

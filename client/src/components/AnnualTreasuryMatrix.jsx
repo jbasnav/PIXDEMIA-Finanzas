@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
 
-export default function AnnualTreasuryMatrix({ matrizData, onSelectMonth, selectedMonth }) {
+export default function AnnualTreasuryMatrix({ matrizData, onSelectMonth, selectedMonth, year = 2026 }) {
   const [showBankDetails, setShowBankDetails] = useState(true);
   const [bankBalanceMode, setBankBalanceMode] = useState('inicio'); // 'inicio', 'fin', 'ambos'
 

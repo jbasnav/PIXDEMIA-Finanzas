@@ -10,6 +10,7 @@ import ProjectsView from './views/ProjectsView';
 import SimulatorView from './views/SimulatorView';
 import BudgetsAndFoodView from './views/BudgetsAndFoodView';
 import AccountsView from './views/AccountsView';
+import ErrorBoundary from './components/ErrorBoundary';
 import { api, getGlobalUser, setGlobalUser } from './services/api';
 
 export default function App() {
@@ -94,45 +95,47 @@ export default function App() {
 
       {/* Contenido Principal de la SPA */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-        {currentTab === 'dashboard' && (
-          <DashboardView 
-            key={`dash-${refreshTrigger}`}
-            onOpenQuickAdd={() => setIsQuickAddOpen(true)} 
-            onOpenImport={() => setIsImportOpen(true)}
-            onOpenAccountsManager={() => setIsAccountsModalOpen(true)}
-          />
-        )}
+        <ErrorBoundary>
+          {currentTab === 'dashboard' && (
+            <DashboardView 
+              key={`dash-${refreshTrigger}`}
+              onOpenQuickAdd={() => setIsQuickAddOpen(true)} 
+              onOpenImport={() => setIsImportOpen(true)}
+              onOpenAccountsManager={() => setIsAccountsModalOpen(true)}
+            />
+          )}
 
-        {currentTab === 'transactions' && (
-          <TransactionsView 
-            key={`trans-${refreshTrigger}`}
-            onOpenQuickAdd={() => setIsQuickAddOpen(true)}
-            onOpenImport={() => setIsImportOpen(true)}
-            refreshTrigger={refreshTrigger}
-          />
-        )}
+          {currentTab === 'transactions' && (
+            <TransactionsView 
+              key={`trans-${refreshTrigger}`}
+              onOpenQuickAdd={() => setIsQuickAddOpen(true)}
+              onOpenImport={() => setIsImportOpen(true)}
+              refreshTrigger={refreshTrigger}
+            />
+          )}
 
-        {currentTab === 'projects' && (
-          <ProjectsView 
-            key={`proj-${refreshTrigger}`}
-            onOpenQuickAdd={() => setIsQuickAddOpen(true)} 
-          />
-        )}
+          {currentTab === 'projects' && (
+            <ProjectsView 
+              key={`proj-${refreshTrigger}`}
+              onOpenQuickAdd={() => setIsQuickAddOpen(true)} 
+            />
+          )}
 
-        {currentTab === 'simulator' && (
-          <SimulatorView key={`sim-${refreshTrigger}`} />
-        )}
+          {currentTab === 'simulator' && (
+            <SimulatorView key={`sim-${refreshTrigger}`} />
+          )}
 
-        {currentTab === 'budgets_food' && (
-          <BudgetsAndFoodView key={`bf-${refreshTrigger}`} />
-        )}
+          {currentTab === 'budgets_food' && (
+            <BudgetsAndFoodView key={`bf-${refreshTrigger}`} />
+          )}
 
-        {currentTab === 'accounts' && (
-          <AccountsView 
-            key={`acc-${refreshTrigger}`}
-            onOpenQuickAdd={() => setIsQuickAddOpen(true)} 
-          />
-        )}
+          {currentTab === 'accounts' && (
+            <AccountsView 
+              key={`acc-${refreshTrigger}`}
+              onOpenQuickAdd={() => setIsQuickAddOpen(true)} 
+            />
+          )}
+        </ErrorBoundary>
       </main>
 
       {/* Modal de Registro Rápido de Movimientos */}
