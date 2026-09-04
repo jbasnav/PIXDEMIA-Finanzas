@@ -272,6 +272,10 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport, onOpenAcco
       const dateA = new Date(a.fecha || 0).getTime();
       const dateB = new Date(b.fecha || 0).getTime();
       comparison = dateA - dateB;
+    } else if (sortField === 'estado') {
+      const stateA = a.es_consolidado !== undefined ? Number(a.es_consolidado) : 1;
+      const stateB = b.es_consolidado !== undefined ? Number(b.es_consolidado) : 1;
+      comparison = stateA - stateB;
     } else if (sortField === 'cuenta') {
       comparison = (a.cuenta_nombre || '').localeCompare(b.cuenta_nombre || '', 'es', { sensitivity: 'base' });
     } else if (sortField === 'concepto') {
@@ -786,7 +790,16 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport, onOpenAcco
                         {renderSortIcon('fecha')}
                       </div>
                     </th>
-                    <th className="w-[8%] py-2.5 px-1 text-center">Estado</th>
+                    <th 
+                      onClick={() => handleSort('estado')}
+                      className="w-[8%] py-2.5 px-1 text-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors select-none group"
+                      title="Ordenar por Estado (Real / Previsto)"
+                    >
+                      <div className="flex items-center justify-center space-x-0.5">
+                        <span>Estado</span>
+                        {renderSortIcon('estado')}
+                      </div>
+                    </th>
                     <th 
                       onClick={() => handleSort('cuenta')}
                       className="w-[11%] py-2.5 px-1.5 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors select-none group"

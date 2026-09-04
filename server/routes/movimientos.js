@@ -98,6 +98,8 @@ router.get('/', (req, res) => {
     // Mapeo seguro de columnas para ordenación
     const sortColumnMap = {
       fecha: 'm.fecha',
+      estado: 'COALESCE(m.es_consolidado, 1)',
+      es_consolidado: 'COALESCE(m.es_consolidado, 1)',
       cuenta: 'c.nombre',
       concepto: 'm.concepto',
       categoria: 'cat.nombre',
