@@ -186,6 +186,7 @@ function getDashboardMetrics(year = 2026, month = null, usuarioId = 1) {
       saldoInicialSantander: Number((initialBanksThisMonth[1] || 0).toFixed(2)),
       saldoInicialKutxa: Number((initialBanksThisMonth[2] || 0).toFixed(2)),
       saldoInicialN26: Number((initialBanksThisMonth[3] || 0).toFixed(2)),
+      saldosInicialesBancos: { ...initialBanksThisMonth },
       ingresos: Number(ingTotalMes.toFixed(2)),
       ingresosReales: Number(ingRealesMes.toFixed(2)),
       ingresosPrevistos: Number(ingPrevistosMes.toFixed(2)),
@@ -198,6 +199,7 @@ function getDashboardMetrics(year = 2026, month = null, usuarioId = 1) {
       saldoFinalSantander: Number((currentBankBalances[1] || 0).toFixed(2)),
       saldoFinalKutxa: Number((currentBankBalances[2] || 0).toFixed(2)),
       saldoFinalN26: Number((currentBankBalances[3] || 0).toFixed(2)),
+      saldosFinalesBancos: { ...currentBankBalances },
       totalMovimientos: movsMes.length
     });
   }
@@ -213,7 +215,14 @@ function getDashboardMetrics(year = 2026, month = null, usuarioId = 1) {
       totalGastosRealesAno: Number((matrizMeses.reduce((acc, m) => acc + m.gastosReales, 0)).toFixed(2)),
       totalGastosPrevistosAno: Number((matrizMeses.reduce((acc, m) => acc + m.gastosPrevistos, 0)).toFixed(2)),
       totalGastosAno: Number((matrizMeses.reduce((acc, m) => acc + m.gastosTotal, 0)).toFixed(2)),
-      totalInvertidoAno: Number((matrizMeses.reduce((acc, m) => acc + m.inversion, 0)).toFixed(2))
+      totalInvertidoAno: Number((matrizMeses.reduce((acc, m) => acc + m.inversion, 0)).toFixed(2)),
+      cuentasDetalle: liquidAccounts.map(c => ({
+        id: c.id,
+        nombre: c.nombre,
+        tipo: c.tipo,
+        color_hex: c.color_hex,
+        saldoInicial2026: c.saldo_inicial_2026 || 0
+      }))
     },
     meses: matrizMeses
   };

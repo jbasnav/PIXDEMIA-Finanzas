@@ -16,7 +16,8 @@ import {
 import { formatCurrency } from '../utils/formatters';
 
 export default function AnnualTreasuryMatrix({ matrizData, onSelectMonth, selectedMonth }) {
-  const [showBankDetails, setShowBankDetails] = useState(false);
+  const [showBankDetails, setShowBankDetails] = useState(true);
+  const [bankBalanceMode, setBankBalanceMode] = useState('inicio'); // 'inicio', 'fin', 'ambos'
 
   if (!matrizData || !matrizData.meses || matrizData.meses.length === 0) {
     return null;
@@ -24,10 +25,38 @@ export default function AnnualTreasuryMatrix({ matrizData, onSelectMonth, select
 
   const { resumenAno, meses } = matrizData;
 
+  const cuentasLiquid = resumenAno.cuentasDetalle && resumenAno.cuentasDetalle.length > 0
+    ? resumenAno.cuentasDetalle
+    : [
+        { id: 1, nombre: 'Santander', color_hex: '#ec0000', saldoInicial2026: 6070.02 },
+        { id: 2, nombre: 'Kutxa', color_hex: '#008080', saldoInicial2026: 3232.92 },
+        { id: 3, nombre: 'N26', color_hex: '#36a18b', saldoInicial2026: 15.31 }
+      ];
+
   // Formato compacto para números en la matriz (evita decimales innecesarios en la tabla para ganar espacio horizontal y no desbordar)
   const fmt = (val) => {
     if (val === null || val === undefined || val === 0) return '-';
     return Math.round(val).toLocaleString('es-ES') + '€';
+  };
+
+  const getSaldoInicial = (cta, m) => {
+    if (m.saldosInicialesBancos && m.saldosInicialesBancos[cta.id] !== undefined) {
+      return m.saldosInicialesBancos[cta.id];
+    }
+    if (cta.id === 1) return m.saldoInicialSantander;
+    if (cta.id === 2) return m.saldoInicialKutxa;
+    if (cta.id === 3) return m.saldoInicialN26;
+    return m.numMes === 1 ? cta.saldoInicial2026 : 0;
+  };
+
+  const getSaldoFinal = (cta, m) => {
+    if (m.saldosFinalesBancos && m.saldosFinalesBancos[cta.id] !== undefined) {
+      return m.saldosFinalesBancos[cta.id];
+    }
+    if (cta.id === 1) return m.saldoFinalSantander;
+    if (cta.id === 2) return m.saldoFinalKutxa;
+    if (cta.id === 3) return m.saldoFinalN26;
+    return 0;
   };
 
   return (
@@ -49,14 +78,53 @@ export default function AnnualTreasuryMatrix({ matrizData, onSelectMonth, select
           </h2>
         </div>
 
-        {/* Botón de toggle para desglose por banco */}
-        <div className="flex items-center space-x-2 shrink-0">
+        {/* Selector de modo y toggle para desglose por banco */}
+        <div className="flex items-center space-x-1.5 shrink-0">
+          <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl text-[10px] font-bold border border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => { setShowBankDetails(true); setBankBalanceMode('inicio'); }}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                showBankDetails && bankBalanceMode === 'inicio' 
+                  ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-xs font-black' 
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+              title="Ver saldos de cada banco al inicio de cada mes (incluyendo apertura 1 de Enero)"
+            >
+              💼 A Inicio (Apertura)
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowBankDetails(true); setBankBalanceMode('fin'); }}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                showBankDetails && bankBalanceMode === 'fin' 
+                  ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-xs font-black' 
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+              title="Ver saldos de cada banco al cierre de cada mes"
+            >
+              🏦 A Fin (Cierre)
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowBankDetails(true); setBankBalanceMode('ambos'); }}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                showBankDetails && bankBalanceMode === 'ambos' 
+                  ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-xs font-black' 
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+              title="Ver ambos saldos (Inicio y Cierre) por banco"
+            >
+              🔄 Ambos
+            </button>
+          </div>
+
           <button
             onClick={() => setShowBankDetails(!showBankDetails)}
-            className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer"
+            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl text-[10px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer"
           >
             <Layers className="w-3.5 h-3.5 text-indigo-500" />
-            <span>{showBankDetails ? 'Ocultar Bancos' : 'Ver Bancos'}</span>
+            <span>{showBankDetails ? 'Ocultar' : 'Ver Bancos'}</span>
           </button>
         </div>
       </div>
@@ -74,8 +142,8 @@ export default function AnnualTreasuryMatrix({ matrizData, onSelectMonth, select
           <p className="text-sm sm:text-base xl:text-base 2xl:text-lg font-black text-slate-900 dark:text-white mt-1 whitespace-nowrap">
             {formatCurrency(resumenAno.saldoInicialLiquido)}
           </p>
-          <p className="text-[9px] text-slate-400 mt-1 truncate">
-            Santander: 6.070€ | Kutxa: 3.233€
+          <p className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 truncate" title={cuentasLiquid.map(c => `${c.nombre}: ${fmt(c.saldoInicial2026)}`).join(' | ')}>
+            {cuentasLiquid.map(c => `${c.nombre}: ${fmt(c.saldoInicial2026)}`).join(' | ')}
           </p>
         </div>
 
@@ -321,55 +389,78 @@ export default function AnnualTreasuryMatrix({ matrizData, onSelectMonth, select
             {showBankDetails && (
               <>
                 <tr className="bg-slate-50 dark:bg-slate-800/40 text-[9px] text-slate-400 uppercase font-bold tracking-wider">
-                  <td colSpan={14} className="py-1 px-2">
-                    Saldos a Fin de Mes por Entidad Bancaria
+                  <td colSpan={14} className="py-1.5 px-2">
+                    <div className="flex flex-wrap items-center justify-between gap-1">
+                      <span className="text-indigo-600 dark:text-indigo-400 font-black">
+                        {bankBalanceMode === 'inicio' && '💼 Saldos al Inicio de Cada Mes (Incluye Saldo Inicial al 1 de Enero)'}
+                        {bankBalanceMode === 'fin' && '🏦 Saldos al Cierre / Fin de Cada Mes'}
+                        {bankBalanceMode === 'ambos' && '🔄 Saldos por Entidad Bancaria (Apertura y Cierre de Mes)'}
+                      </span>
+                      <span className="normal-case text-[9px] text-slate-500 dark:text-slate-400 font-semibold">
+                        {bankBalanceMode === 'inicio' ? 'TOTAL = Saldo de Apertura 1 Ene' : 'TOTAL = Cierre Proyectado 31 Dic'}
+                      </span>
+                    </div>
                   </td>
                 </tr>
 
-                <tr>
-                  <td className="py-1.5 px-2 text-slate-600 dark:text-slate-400 truncate pl-3 flex items-center space-x-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#ec0000] shrink-0" />
-                    <span>Santander</span>
-                  </td>
-                  {meses.map(m => (
-                    <td key={m.numMes} className="py-1.5 px-0.5 text-center text-slate-700 dark:text-slate-300 font-mono text-[10px]" title={formatCurrency(m.saldoFinalSantander)}>
-                      {fmt(m.saldoFinalSantander)}
-                    </td>
-                  ))}
-                  <td className="py-1.5 px-1 text-center font-bold bg-slate-100 dark:bg-slate-800/60 font-mono text-[10px]">
-                    {fmt(meses[11]?.saldoFinalSantander || 0)}
-                  </td>
-                </tr>
+                {cuentasLiquid.map(cta => {
+                  const showInicio = bankBalanceMode === 'inicio' || bankBalanceMode === 'ambos';
+                  const showFin = bankBalanceMode === 'fin' || bankBalanceMode === 'ambos';
 
-                <tr>
-                  <td className="py-1.5 px-2 text-slate-600 dark:text-slate-400 truncate pl-3 flex items-center space-x-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#008080] shrink-0" />
-                    <span>Kutxa</span>
-                  </td>
-                  {meses.map(m => (
-                    <td key={m.numMes} className={`py-1.5 px-0.5 text-center font-mono text-[10px] ${m.saldoFinalKutxa < 0 ? 'text-rose-500' : 'text-slate-700 dark:text-slate-300'}`} title={formatCurrency(m.saldoFinalKutxa)}>
-                      {fmt(m.saldoFinalKutxa)}
-                    </td>
-                  ))}
-                  <td className="py-1.5 px-1 text-center font-bold bg-slate-100 dark:bg-slate-800/60 font-mono text-[10px] text-rose-500">
-                    {fmt(meses[11]?.saldoFinalKutxa || 0)}
-                  </td>
-                </tr>
+                  return (
+                    <React.Fragment key={cta.id}>
+                      {showInicio && (
+                        <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="py-1.5 px-2 text-slate-700 dark:text-slate-300 truncate pl-3 flex items-center space-x-1.5" title={`Saldo Inicio de Mes para ${cta.nombre}`}>
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: cta.color_hex || '#4f46e5' }} />
+                            <span className="font-bold text-slate-900 dark:text-white">{cta.nombre}</span>
+                            <span className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold">(Inicio)</span>
+                          </td>
+                          {meses.map(m => {
+                            const val = getSaldoInicial(cta, m);
+                            return (
+                              <td 
+                                key={m.numMes} 
+                                className={`py-1.5 px-0.5 text-center font-mono text-[10px] ${val < 0 ? 'text-rose-500 font-bold' : 'text-slate-700 dark:text-slate-300 font-semibold'}`} 
+                                title={`${cta.nombre} al inicio de ${m.mesNombre}: ${formatCurrency(val)}`}
+                              >
+                                {fmt(val)}
+                              </td>
+                            );
+                          })}
+                          <td className="py-1.5 px-1 text-center font-black bg-slate-100 dark:bg-slate-800/60 font-mono text-[10px] text-indigo-600 dark:text-indigo-400" title={`Saldo Apertura al 1 Ene: ${formatCurrency(cta.saldoInicial2026)}`}>
+                            {fmt(cta.saldoInicial2026)}
+                          </td>
+                        </tr>
+                      )}
 
-                <tr>
-                  <td className="py-1.5 px-2 text-slate-600 dark:text-slate-400 truncate pl-3 flex items-center space-x-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#36a18b] shrink-0" />
-                    <span>N26</span>
-                  </td>
-                  {meses.map(m => (
-                    <td key={m.numMes} className={`py-1.5 px-0.5 text-center font-mono text-[10px] ${m.saldoFinalN26 < 0 ? 'text-rose-500' : 'text-slate-700 dark:text-slate-300'}`} title={formatCurrency(m.saldoFinalN26)}>
-                      {fmt(m.saldoFinalN26)}
-                    </td>
-                  ))}
-                  <td className="py-1.5 px-1 text-center font-bold bg-slate-100 dark:bg-slate-800/60 font-mono text-[10px] text-rose-500">
-                    {fmt(meses[11]?.saldoFinalN26 || 0)}
-                  </td>
-                </tr>
+                      {showFin && (
+                        <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="py-1.5 px-2 text-slate-700 dark:text-slate-300 truncate pl-3 flex items-center space-x-1.5" title={`Saldo Cierre de Mes para ${cta.nombre}`}>
+                            <span className="w-2 h-2 rounded-full shrink-0 opacity-70" style={{ backgroundColor: cta.color_hex || '#4f46e5' }} />
+                            <span className="font-bold text-slate-900 dark:text-white">{cta.nombre}</span>
+                            <span className="text-[9px] text-slate-400 font-semibold">(Fin)</span>
+                          </td>
+                          {meses.map(m => {
+                            const val = getSaldoFinal(cta, m);
+                            return (
+                              <td 
+                                key={m.numMes} 
+                                className={`py-1.5 px-0.5 text-center font-mono text-[10px] ${val < 0 ? 'text-rose-500 font-bold' : 'text-slate-700 dark:text-slate-300'}`} 
+                                title={`${cta.nombre} al cierre de ${m.mesNombre}: ${formatCurrency(val)}`}
+                              >
+                                {fmt(val)}
+                              </td>
+                            );
+                          })}
+                          <td className="py-1.5 px-1 text-center font-bold bg-slate-100 dark:bg-slate-800/60 font-mono text-[10px]" title={`Saldo Cierre Proyectado a 31 Dic: ${formatCurrency(getSaldoFinal(cta, meses[11]))}`}>
+                            {fmt(getSaldoFinal(cta, meses[11]))}
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </>
             )}
 
