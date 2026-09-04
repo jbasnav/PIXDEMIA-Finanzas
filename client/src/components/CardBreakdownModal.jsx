@@ -27,23 +27,36 @@ export default function CardBreakdownModal({
   const loadCardTickets = async () => {
     try {
       setLoading(true);
-      const dateStr = movimiento.fecha ? movimiento.fecha.substring(0, 7) : ''; // 'YYYY-MM'
-      const year = dateStr.substring(0, 4) || '2026';
-      const month = dateStr.substring(5, 7) || '';
+      let tarjetaId = '';
+      if (cuentas && cuentas.length > 0) {
+        const tc = cuentas.find(c => c.tipo === 'tarjeta' || c.nombre?.toLowerCase().includes('tarjeta'));
+        if (tc) tarjetaId = tc.id;
+      }
+      if (!tarjetaId) {
+        try {
+          const cList = await api.getCuentas();
+          const tc = cList.find(c => c.tipo === 'tarjeta' || c.nombre?.toLowerCase().includes('tarjeta'));
+          if (tc) tarjetaId = tc.id;
+        } catch (e) {
+          console.warn('Error fetching accounts in CardBreakdownModal', e);
+        }
+      }
 
-      // Buscar cuenta de Tarjeta Kutxa
-      const tarjetaCuenta = cuentas.find(c => c.tipo === 'tarjeta' || c.nombre.toLowerCase().includes('tarjeta'));
-      const tarjetaId = tarjetaCuenta ? tarjetaCuenta.id : '';
+      const dateStr = movimiento.fecha ? movimiento.fecha.substring(0, 10) : '';
+      const ano = dateStr ? dateStr.substring(0, 4) : '2026';
+      const mesStr = dateStr && dateStr.length >= 7 ? dateStr.substring(5, 7) : '';
+      const mes = mesStr ? parseInt(mesStr, 10) : undefined;
 
-      // Obtener movimientos de tarjeta
       const params = {
-        year,
-        ...(month ? { month: parseInt(month, 10) } : {}),
-        ...(tarjetaId ? { cuenta_id: tarjetaId } : {})
+        ano,
+        ...(mes ? { mes } : {}),
+        ...(tarjetaId ? { cuenta_id: tarjetaId } : {}),
+        limit: 500
       };
 
       const res = await api.getMovimientos(params);
-      setTickets(res || []);
+      const list = Array.isArray(res) ? res : (res?.data || res?.movimientos || []);
+      setTickets(list);
     } catch (err) {
       console.error('Error cargando tickets de tarjeta:', err);
     } finally {

@@ -197,6 +197,21 @@ export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refresh
 
           <div className="flex items-center space-x-2 w-full sm:w-auto justify-end flex-wrap gap-y-2">
             
+            {/* Botón Ver Desglose Tarjeta */}
+            <button
+              onClick={() => setSelectedCardMov({
+                fecha: '2026-01-01',
+                concepto: 'Todos los Tickets de Tarjeta Kutxa',
+                cuenta_nombre: 'Tarjeta Kutxa',
+                importe: 0
+              })}
+              className="flex items-center space-x-1.5 px-3 py-2 text-xs sm:text-sm font-semibold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/40 hover:bg-teal-100 dark:hover:bg-teal-900/50 rounded-xl transition-colors border border-teal-200 dark:border-teal-800/60 shadow-sm cursor-pointer"
+              title="Ver desglose detallado de todos los tickets y compras de tarjeta"
+            >
+              <CreditCard className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+              <span>💳 Desglose Tarjeta</span>
+            </button>
+
             {/* Botón Importar CSV / Excel */}
             <button
               onClick={onOpenImport}

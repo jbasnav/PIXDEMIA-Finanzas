@@ -559,7 +559,7 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport, onOpenAcco
             </div>
 
             {/* Campo de Búsqueda Rápida */}
-            <div className="relative w-full sm:w-44">
+            <div className="relative w-full sm:w-40">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
@@ -569,6 +569,22 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport, onOpenAcco
                 className="w-full pl-8 pr-2.5 py-1.5 text-[11px] rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
             </div>
+
+            {/* Botón Acceso Rápido Tickets Tarjeta */}
+            <button
+              type="button"
+              onClick={() => setSelectedCardMov({
+                fecha: selectedMonthDetail ? `${year}-${String(selectedMonthDetail).padStart(2, '0')}-01` : `${year}-01-01`,
+                concepto: selectedMonthDetail ? `Gastos Tarjeta Kutxa (${MONTH_NAMES_FULL[selectedMonthDetail - 1]})` : `Todos los Tickets de Tarjeta Kutxa ${year}`,
+                cuenta_nombre: 'Tarjeta Kutxa',
+                importe: 0
+              })}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold text-teal-700 dark:text-teal-300 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/60 dark:hover:bg-teal-900/80 border border-teal-200 dark:border-teal-800 transition-colors shadow-2xs cursor-pointer shrink-0"
+              title="Ver desglose detallado de compras y tickets de Tarjeta Kutxa"
+            >
+              <CreditCard className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span>💳 Desglose Tarjeta</span>
+            </button>
           </div>
         </div>
 
