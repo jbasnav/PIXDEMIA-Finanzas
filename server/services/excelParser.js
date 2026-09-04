@@ -7,6 +7,7 @@ const db = require('../db');
 function mapAccountName(rawName) {
   if (!rawName) return 'Santander';
   const lower = String(rawName).toLowerCase().trim();
+  if (lower.includes('tarjeta') || lower.includes('visa') || lower.includes('mastercard')) return 'Tarjeta Kutxa';
   if (lower === 's' || lower.includes('santander')) return 'Santander';
   if (lower === 'k' || lower.includes('kutxa')) return 'Kutxa';
   if (lower === 'n' || lower.includes('n26')) return 'N26';
@@ -182,12 +183,15 @@ function parseExcelFile(filePathOrBuffer, defaultAccountName = 'Santander') {
   const categoriasList = db.prepare('SELECT id, nombre, tipo FROM categorias').all();
   const categoriasMap = new Map(categoriasList.map(c => [c.nombre.toLowerCase(), c.id]));
 
-  const getOrCreateAccountId = (name) => {
+  const getOrCreateAccountId = (name, defaultType = 'corriente') => {
     const canonical = mapAccountName(name || defaultAccountName);
     let id = cuentasMap.get(canonical.toLowerCase());
     if (!id) {
-      const res = db.prepare('INSERT INTO cuentas (nombre, tipo, saldo_inicial_2026, color_hex) VALUES (?, ?, 0, ?)')
-        .run(canonical, 'corriente', '#4f46e5');
+      const isCard = canonical.toLowerCase().includes('tarjeta');
+      const tipo = isCard ? 'tarjeta' : defaultType;
+      const color = isCard ? '#008080' : '#4f46e5';
+      const res = db.prepare('INSERT INTO cuentas (nombre, tipo, saldo_inicial_2026, color_hex, usuario_id) VALUES (?, ?, 0, ?, 1)')
+        .run(canonical, tipo, color);
       id = res.lastInsertRowid;
       cuentasMap.set(canonical.toLowerCase(), id);
     }
@@ -203,9 +207,9 @@ function parseExcelFile(filePathOrBuffer, defaultAccountName = 'Santander') {
 
   const insertMovStmt = db.prepare(`
     INSERT INTO movimientos (
-      fecha, cuenta_id, categoria_id, subcategoria, concepto, importe,
-      es_transferencia_interna, cuenta_destino_id, es_consolidado, etiqueta_especial, notas, origen_importacion
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Importacion_Balance_2026')
+      fecha, cuenta_id, cuenta_imputada_id, categoria_id, subcategoria, concepto, importe,
+      es_transferencia_interna, cuenta_destino_id, es_consolidado, etiqueta_especial, notas, usuario_id, origen_importacion
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Importacion_Balance_2026')
   `);
 
   const checkDuplicateStmt = db.prepare(`
@@ -326,21 +330,21 @@ function parseExcelFile(filePathOrBuffer, defaultAccountName = 'Santander') {
     }
 
     // ==========================================
-    // 2. PROCESAR HOJA 'GASTOS ' (Bloques por Entidad: Santander, Kutxa, N26)
+    // 2. PROCESAR HOJA 'GASTOS ' (Bloques por Entidad: Santander, Kutxa, N26, Tarjeta Kutxa)
     // ==========================================
     if (gastosSheetName) {
       const gastosSheet = workbook.Sheets[gastosSheetName];
       const dataGastos = XLSX.utils.sheet_to_json(gastosSheet, { header: 1, defval: null });
 
       const bankSections = [
-        { name: 'Santander', bank: 'Santander', startRow: 2, endRow: 16 },
-        { name: 'Kutxa', bank: 'Kutxa', startRow: 21, endRow: 53 },
-        { name: 'N26', bank: 'N26', startRow: 57, endRow: 75 },
-        { name: 'Desglose Tarjeta Kutxa', bank: 'Kutxa', startRow: 80, endRow: 118 }
+        { name: 'Santander', bank: 'Santander', defaultType: 'corriente', isCardBreakdown: false, startRow: 2, endRow: 16 },
+        { name: 'Kutxa', bank: 'Kutxa', defaultType: 'corriente', isCardBreakdown: false, startRow: 21, endRow: 53 },
+        { name: 'N26', bank: 'N26', defaultType: 'ahorro_emergencia', isCardBreakdown: false, startRow: 57, endRow: 75 },
+        { name: 'Tarjeta Kutxa', bank: 'Tarjeta Kutxa', defaultType: 'tarjeta', isCardBreakdown: true, startRow: 80, endRow: 118 }
       ];
 
       for (const sec of bankSections) {
-        const defaultSecAccountId = getOrCreateAccountId(sec.bank);
+        const defaultSecAccountId = getOrCreateAccountId(sec.bank, sec.defaultType);
 
         for (let m = 0; m < 12; m++) {
           const colStart = 1 + (m * 6);
@@ -371,15 +375,17 @@ function parseExcelFile(filePathOrBuffer, defaultAccountName = 'Santander') {
                   continue;
                 }
 
-                // Si es la fila agregada 'GASTOS TARJETA' en la sección superior de Kutxa,
-                // se omite porque abajo (filas 81-118) están todas las compras desglosadas con su banco asignado.
-                if (sec.name === 'Kutxa' && cLower.includes('gastos tarjeta')) {
-                  continue;
-                }
-
                 const fecha = parseDateString(rawDia, mesNumero, 2026);
-                // Si la fila especifica la columna BANCO ('S', 'K', 'N'), se imputa a ese banco destino
-                const cuentaId = rawBanco ? getOrCreateAccountId(rawBanco) : defaultSecAccountId;
+                
+                // En la sección Kutxa, GASTOS TARJETA es el cargo bancario real en la cuenta Kutxa
+                // En la sección Desglose Tarjeta Kutxa, cuentaId es Tarjeta Kutxa y cuentaImputadaId es el banco asignado (K, S, N)
+                const cuentaId = sec.isCardBreakdown
+                  ? defaultSecAccountId
+                  : (rawBanco ? getOrCreateAccountId(rawBanco) : defaultSecAccountId);
+
+                const cuentaImputadaId = sec.isCardBreakdown
+                  ? (rawBanco ? getOrCreateAccountId(rawBanco) : getOrCreateAccountId('Kutxa'))
+                  : null;
 
                 const catName = inferCategory(concepto, tienda);
                 const catId = getCategoryId(catName);
@@ -393,17 +399,22 @@ function parseExcelFile(filePathOrBuffer, defaultAccountName = 'Santander') {
                   else if (cLower.includes('revolut')) cuentaDestinoId = getOrCreateAccountId('N26');
                 }
 
+                const finalConcepto = sec.isCardBreakdown
+                  ? (concepto || tienda)
+                  : (cLower.includes('gastos tarjeta') ? 'GASTOS TARJETA' : concepto);
+
                 importedMovements.push({
                   fecha,
                   cuenta_id: cuentaId,
+                  cuenta_imputada_id: cuentaImputadaId,
                   categoria_id: catId,
                   subcategoria: tienda || concepto,
-                  concepto: concepto,
+                  concepto: finalConcepto,
                   importe: numAmount < 0 ? numAmount : -Math.abs(numAmount),
                   es_transferencia_interna: isTransfer ? 1 : 0,
                   cuenta_destino_id: cuentaDestinoId,
                   es_consolidado: 1, // Tickets reales registrados
-                  etiqueta_especial: inferSpecialTag(concepto, tienda),
+                  etiqueta_especial: sec.isCardBreakdown ? (inferSpecialTag(concepto, tienda) || 'Tarjeta Kutxa') : inferSpecialTag(concepto, tienda),
                   notas: `Hoja GASTOS ${sec.name} Mes ${mesNumero} Fila ${r + 1}`
                 });
               }
@@ -514,6 +525,7 @@ function parseExcelFile(filePathOrBuffer, defaultAccountName = 'Santander') {
       insertMovStmt.run(
         mov.fecha,
         mov.cuenta_id,
+        mov.cuenta_imputada_id || null,
         mov.categoria_id,
         mov.subcategoria || null,
         mov.concepto,
@@ -522,7 +534,8 @@ function parseExcelFile(filePathOrBuffer, defaultAccountName = 'Santander') {
         mov.cuenta_destino_id || null,
         mov.es_consolidado !== undefined ? mov.es_consolidado : 1,
         mov.etiqueta_especial || null,
-        mov.notas || null
+        mov.notas || null,
+        mov.usuario_id || 1
       );
 
       results.movimientosImportados++;

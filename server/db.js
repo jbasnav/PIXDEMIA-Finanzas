@@ -184,6 +184,34 @@ function initSchemaAndSeeds() {
     }
   }
 
+  // Migración para expandir tipos de cuenta permitidos ('tarjeta', 'prestamo')
+  try {
+    const tableSqlRes = rawDb.exec("SELECT sql FROM sqlite_master WHERE type='table' AND name='cuentas'");
+    const tableSql = tableSqlRes[0]?.values[0][0] || '';
+    if (tableSql && !tableSql.includes("'tarjeta'")) {
+      rawDb.exec(`
+        PRAGMA foreign_keys=off;
+        CREATE TABLE IF NOT EXISTS cuentas_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario_id INTEGER DEFAULT 1 REFERENCES usuarios_gestion(id) ON DELETE CASCADE,
+            nombre TEXT NOT NULL,
+            tipo TEXT NOT NULL CHECK (tipo IN ('corriente', 'ahorro_emergencia', 'inversion', 'epsv', 'tarjeta', 'prestamo')),
+            saldo_inicial_2026 REAL DEFAULT 0.0,
+            color_hex TEXT DEFAULT '#3b82f6',
+            activo INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO cuentas_new (id, usuario_id, nombre, tipo, saldo_inicial_2026, color_hex, activo, created_at)
+          SELECT id, COALESCE(usuario_id, 1), nombre, tipo, saldo_inicial_2026, color_hex, activo, created_at FROM cuentas;
+        DROP TABLE cuentas;
+        ALTER TABLE cuentas_new RENAME TO cuentas;
+        PRAGMA foreign_keys=on;
+      `);
+    }
+  } catch (e) {
+    console.error('Error migrando tabla cuentas:', e);
+  }
+
   // Semilla de Usuario por defecto
   try {
     const userCountRes = rawDb.exec('SELECT COUNT(*) as count FROM usuarios_gestion');

@@ -23,7 +23,8 @@ import {
   X,
   Edit2,
   Trash2,
-  Clock
+  Clock,
+  CreditCard
 } from 'lucide-react';
 import { 
   ComposedChart,
@@ -43,6 +44,7 @@ import {
 import KpiCard from '../components/KpiCard';
 import BudgetAlerts from '../components/BudgetAlerts';
 import EditTransactionModal from '../components/EditTransactionModal';
+import CardBreakdownModal from '../components/CardBreakdownModal';
 import AnnualTreasuryMatrix from '../components/AnnualTreasuryMatrix';
 import { formatCurrency, formatPercent, MONTHS, getMonthName } from '../utils/formatters';
 import { api } from '../services/api';
@@ -61,9 +63,10 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport, onOpenAcco
   const [presupuestos, setPresupuestos] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Estados para Edición de Movimiento
+  // Estados para Edición de Movimiento y Desglose de Tarjeta
   const [editingMovimiento, setEditingMovimiento] = useState(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [selectedCardMov, setSelectedCardMov] = useState(null);
 
   // Estados para desglose mensual al hacer clic en el gráfico
   const [selectedMonthDetail, setSelectedMonthDetail] = useState(1); // 1 = Enero por defecto
@@ -876,12 +879,28 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport, onOpenAcco
                           </span>
                         </td>
                         <td className="py-2 px-2 text-slate-900 dark:text-white font-bold truncate">
-                          <span title={mov.concepto}>{mov.concepto}</span>
-                          {mov.etiqueta_especial && (
-                            <span className="ml-1 px-1 py-0.2 rounded text-[8px] font-extrabold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                              {mov.etiqueta_especial}
-                            </span>
-                          )}
+                          <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                            <span title={mov.concepto}>{mov.concepto}</span>
+                            {(mov.concepto?.toUpperCase().includes('GASTOS TARJETA') || mov.subcategoria?.toUpperCase().includes('GASTOS TARJETA')) && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedCardMov(mov);
+                                }}
+                                className="inline-flex items-center space-x-1 px-1.5 py-0.2 rounded-full text-[9px] font-black bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/60 dark:hover:bg-teal-900/80 text-teal-700 dark:text-teal-300 border border-teal-300 dark:border-teal-700 transition-all cursor-pointer shadow-2xs"
+                                title="Ver tickets y desglose de compras de esta tarjeta"
+                              >
+                                <CreditCard className="w-2.5 h-2.5 text-teal-600 dark:text-teal-400" />
+                                <span>Ver Tickets</span>
+                              </button>
+                            )}
+                            {mov.etiqueta_especial && (
+                              <span className="ml-1 px-1 py-0.2 rounded text-[8px] font-extrabold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                {mov.etiqueta_especial}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-2 px-1.5 whitespace-nowrap truncate">
                           <span className="text-slate-600 dark:text-slate-300 font-semibold text-[10px] truncate block" title={mov.categoria_nombre}>
@@ -1005,6 +1024,15 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport, onOpenAcco
           loadMonthMovements();
           loadDashboardData();
         }}
+        cuentas={saldosCuentas}
+        categorias={distribucionCategorias}
+      />
+
+      {/* Modal de Desglose de Tickets de Tarjeta */}
+      <CardBreakdownModal
+        isOpen={Boolean(selectedCardMov)}
+        onClose={() => setSelectedCardMov(null)}
+        movimiento={selectedCardMov}
         cuentas={saldosCuentas}
         categorias={distribucionCategorias}
       />

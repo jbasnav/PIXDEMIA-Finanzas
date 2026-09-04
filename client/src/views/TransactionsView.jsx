@@ -19,20 +19,23 @@ import {
   ArrowDown,
   Edit2,
   CheckCircle2,
-  Clock
+  Clock,
+  CreditCard
 } from 'lucide-react';
 import { formatCurrency, formatDate, MONTHS } from '../utils/formatters';
 import { api } from '../services/api';
 import EditTransactionModal from '../components/EditTransactionModal';
+import CardBreakdownModal from '../components/CardBreakdownModal';
 
 export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refreshTrigger }) {
   const [movimientos, setMovimientos] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // Estados de Edición
+  // Estados de Edición y Desglose de Tarjetas
   const [editingMovimiento, setEditingMovimiento] = useState(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [selectedCardMov, setSelectedCardMov] = useState(null);
 
   // Filtros
   const [busqueda, setBusqueda] = useState('');
@@ -446,8 +449,24 @@ export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refresh
 
                       {/* Concepto & Subcategoría/Tienda */}
                       <td className="py-2.5 px-2 truncate">
-                        <div className="font-bold text-slate-900 dark:text-white truncate" title={m.concepto}>
-                          {m.concepto}
+                        <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                          <span className="font-bold text-slate-900 dark:text-white truncate" title={m.concepto}>
+                            {m.concepto}
+                          </span>
+                          {(m.concepto?.toUpperCase().includes('GASTOS TARJETA') || m.subcategoria?.toUpperCase().includes('GASTOS TARJETA')) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedCardMov(m);
+                              }}
+                              className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-black bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/60 dark:hover:bg-teal-900/80 text-teal-700 dark:text-teal-300 border border-teal-300 dark:border-teal-700 transition-all cursor-pointer shadow-2xs"
+                              title="Ver tickets y compras desglosadas de esta liquidación de tarjeta"
+                            >
+                              <CreditCard className="w-2.5 h-2.5 text-teal-600 dark:text-teal-400" />
+                              <span>Ver Tickets</span>
+                            </button>
+                          )}
                         </div>
                         {m.subcategoria && m.subcategoria !== m.concepto && (
                           <div className="text-[10px] text-slate-400 truncate" title={m.subcategoria}>
@@ -570,6 +589,15 @@ export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refresh
         movimiento={editingMovimiento}
         onTransactionUpdated={() => loadTransactions()}
         onTransactionDeleted={() => loadTransactions()}
+        cuentas={cuentas}
+        categorias={categorias}
+      />
+
+      {/* Modal de Desglose de Tickets de Tarjeta */}
+      <CardBreakdownModal
+        isOpen={Boolean(selectedCardMov)}
+        onClose={() => setSelectedCardMov(null)}
+        movimiento={selectedCardMov}
         cuentas={cuentas}
         categorias={categorias}
       />
