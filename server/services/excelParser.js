@@ -333,9 +333,10 @@ function parseExcelFile(filePathOrBuffer, defaultAccountName = 'Santander') {
       const dataGastos = XLSX.utils.sheet_to_json(gastosSheet, { header: 1, defval: null });
 
       const bankSections = [
-        { bank: 'Santander', startRow: 2, endRow: 15 },
-        { bank: 'Kutxa', startRow: 21, endRow: 51 },
-        { bank: 'N26', startRow: 57, endRow: 125 }
+        { name: 'Santander', bank: 'Santander', startRow: 2, endRow: 16 },
+        { name: 'Kutxa', bank: 'Kutxa', startRow: 21, endRow: 53 },
+        { name: 'N26', bank: 'N26', startRow: 57, endRow: 75 },
+        { name: 'Desglose Tarjeta Kutxa', bank: 'Kutxa', startRow: 80, endRow: 118 }
       ];
 
       for (const sec of bankSections) {
@@ -364,13 +365,20 @@ function parseExcelFile(filePathOrBuffer, defaultAccountName = 'Santander') {
               if (!isNaN(numAmount) && Math.abs(numAmount) > 0.001) {
                 const tienda = String(rawTienda || '').trim();
                 const concepto = String(rawConcepto || tienda).trim();
-                const cLower = concepto.toLowerCase();
+                const cLower = (concepto + ' ' + tienda).toLowerCase();
 
                 if (cLower.startsWith('total') || cLower.startsWith('gastos mes')) {
                   continue;
                 }
 
+                // Si es la fila agregada 'GASTOS TARJETA' en la sección superior de Kutxa,
+                // se omite porque abajo (filas 81-118) están todas las compras desglosadas con su banco asignado.
+                if (sec.name === 'Kutxa' && cLower.includes('gastos tarjeta')) {
+                  continue;
+                }
+
                 const fecha = parseDateString(rawDia, mesNumero, 2026);
+                // Si la fila especifica la columna BANCO ('S', 'K', 'N'), se imputa a ese banco destino
                 const cuentaId = rawBanco ? getOrCreateAccountId(rawBanco) : defaultSecAccountId;
 
                 const catName = inferCategory(concepto, tienda);
@@ -396,7 +404,7 @@ function parseExcelFile(filePathOrBuffer, defaultAccountName = 'Santander') {
                   cuenta_destino_id: cuentaDestinoId,
                   es_consolidado: 1, // Tickets reales registrados
                   etiqueta_especial: inferSpecialTag(concepto, tienda),
-                  notas: `Hoja GASTOS ${sec.bank} Mes ${mesNumero} Fila ${r + 1}`
+                  notas: `Hoja GASTOS ${sec.name} Mes ${mesNumero} Fila ${r + 1}`
                 });
               }
             }
