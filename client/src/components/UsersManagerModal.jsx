@@ -291,53 +291,53 @@ export default function UsersManagerModal({ isOpen, onClose, onUserSwitched }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Icono Representativo
-                </label>
-                <div className="flex space-x-2">
-                  {[
-                    { id: 'Users', label: 'Familia', icon: Users },
-                    { id: 'Building', label: 'Empresa', icon: Building },
-                    { id: 'Briefcase', label: 'Negocio', icon: Briefcase },
-                    { id: 'User', label: 'Personal', icon: User }
-                  ].map(item => {
-                    const Icon = item.icon;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setForm({ ...form, icono: item.id })}
-                        className={`p-2 rounded-xl border flex items-center space-x-1 transition-all ${
-                          form.icono === item.id 
-                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' 
-                            : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
-                        }`}
-                      >
-                        <Icon className="w-3.5 h-3.5" />
-                        <span className="text-[10px] font-bold">{item.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Color Identificativo
-                </label>
-                <div className="flex flex-wrap gap-1.5 items-center">
-                  {PRESET_USER_COLORS.map(c => (
+            {/* Icono Representativo */}
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                Icono Representativo
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { id: 'Users', label: 'Familia', icon: Users },
+                  { id: 'Building', label: 'Empresa', icon: Building },
+                  { id: 'Briefcase', label: 'Negocio', icon: Briefcase },
+                  { id: 'User', label: 'Personal', icon: User }
+                ].map(item => {
+                  const Icon = item.icon;
+                  return (
                     <button
-                      key={c}
+                      key={item.id}
                       type="button"
-                      onClick={() => setForm({ ...form, color_hex: c })}
-                      className={`w-6 h-6 rounded-full border-2 transition-transform ${form.color_hex === c ? 'scale-125 border-slate-900 dark:border-white shadow-md' : 'border-transparent hover:scale-110'}`}
-                      style={{ backgroundColor: c }}
-                    />
-                  ))}
-                </div>
+                      onClick={() => setForm({ ...form, icono: item.id })}
+                      className={`p-2 rounded-xl border flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
+                        form.icono === item.id 
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm font-bold' 
+                          : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span className="text-xs font-bold">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Color Identificativo en su propia línea */}
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                Color Identificativo
+              </label>
+              <div className="flex flex-wrap gap-2.5 items-center">
+                {PRESET_USER_COLORS.map(c => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setForm({ ...form, color_hex: c })}
+                    className={`w-7 h-7 rounded-full border-2 transition-transform cursor-pointer ${form.color_hex === c ? 'scale-125 border-slate-900 dark:border-white shadow-md' : 'border-transparent hover:scale-110'}`}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
               </div>
             </div>
 
