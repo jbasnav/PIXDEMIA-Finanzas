@@ -20,7 +20,9 @@ import {
   Edit2,
   CheckCircle2,
   Clock,
-  CreditCard
+  CreditCard,
+  Landmark,
+  Repeat
 } from 'lucide-react';
 import { formatCurrency, formatDate, MONTHS } from '../utils/formatters';
 import { api } from '../services/api';
@@ -486,6 +488,24 @@ export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refresh
                           <span className="font-bold text-slate-900 dark:text-white truncate" title={m.concepto}>
                             {m.concepto}
                           </span>
+                          {m.serie_id && (
+                            <span 
+                              className="inline-flex items-center space-x-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
+                              title={`Serie ${m.frecuencia_recurrencia || 'Recurrente'}`}
+                            >
+                              <Repeat className="w-2.5 h-2.5 text-purple-600 dark:text-purple-400" />
+                              <span className="capitalize">{m.frecuencia_recurrencia || 'Serie'}</span>
+                            </span>
+                          )}
+                          {m.pasivo_nombre && (
+                            <span 
+                              className="inline-flex items-center space-x-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 truncate max-w-[140px]"
+                              title={`Vinculado a pasivo: ${m.pasivo_nombre}`}
+                            >
+                              <Landmark className="w-2.5 h-2.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                              <span className="truncate">{m.pasivo_nombre}</span>
+                            </span>
+                          )}
                           {(m.concepto?.toUpperCase().includes('GASTOS TARJETA') || m.subcategoria?.toUpperCase().includes('GASTOS TARJETA')) && (
                             <button
                               type="button"

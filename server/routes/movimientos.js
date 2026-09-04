@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { applyMovimientoPasivoImpact, reverseMovimientoPasivoImpact } = require('../services/pasivoSyncService');
+const { calcularFechasSerie } = require('../services/recurrenciaService');
 
 // Listar movimientos con filtros avanzados
 router.get('/', (req, res) => {
@@ -132,6 +134,10 @@ router.get('/', (req, res) => {
         m.es_transferencia_interna,
         m.cuenta_destino_id,
         cd.nombre as cuenta_destino_nombre,
+        m.pasivo_id,
+        p.nombre as pasivo_nombre,
+        m.serie_id,
+        m.frecuencia_recurrencia,
         COALESCE(m.es_consolidado, 1) as es_consolidado,
         m.etiqueta_especial,
         m.notas,
@@ -142,6 +148,7 @@ router.get('/', (req, res) => {
       JOIN cuentas c ON m.cuenta_id = c.id
       LEFT JOIN cuentas cd ON m.cuenta_destino_id = cd.id
       LEFT JOIN cuentas ci ON m.cuenta_imputada_id = ci.id
+      LEFT JOIN prestamos_y_pasivos p ON m.pasivo_id = p.id
       WHERE ${whereSql}
       ORDER BY ${sortCol} ${orderDir}, m.id ${orderDir}
       LIMIT ? OFFSET ?
@@ -222,6 +229,7 @@ router.post('/', (req, res) => {
       importe,
       es_transferencia_interna = 0,
       cuenta_destino_id = null,
+      pasivo_id = null,
       es_consolidado = 1,
       etiqueta_especial = null,
       notas = ''
@@ -243,15 +251,28 @@ router.post('/', (req, res) => {
       if (Number(cuenta_id) === Number(finalCuentaDestino)) {
         return res.status(400).json({ error: 'La cuenta de origen y destino no pueden ser la misma' });
       }
-      // Asegurarse de que el importe del movimiento base es negativo (salida del origen)
       finalImporte = -Math.abs(finalImporte);
     }
+
+    // Auto-detectar pasivo si no viene indicado explícitamente
+    let finalPasivoId = pasivo_id ? Number(pasivo_id) : null;
+    if (!finalPasivoId) {
+      const pasivos = db.prepare('SELECT id, nombre FROM prestamos_y_pasivos').all();
+      const textToMatch = `${concepto || ''} ${etiqueta_especial || ''} ${subcategoria || ''}`.toLowerCase();
+      const matched = pasivos.find(p => textToMatch.includes(p.nombre.toLowerCase()));
+      if (matched) finalPasivoId = matched.id;
+    }
+
+    const {
+      serie_id = null,
+      frecuencia_recurrencia = null
+    } = req.body;
 
     const stmt = db.prepare(`
       INSERT INTO movimientos (
         usuario_id, fecha, cuenta_id, cuenta_imputada_id, categoria_id, subcategoria, concepto, importe,
-        es_transferencia_interna, cuenta_destino_id, es_consolidado, etiqueta_especial, notas, origen_importacion
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Manual')
+        es_transferencia_interna, cuenta_destino_id, pasivo_id, serie_id, frecuencia_recurrencia, es_consolidado, etiqueta_especial, notas, origen_importacion
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Manual')
     `);
 
     const info = stmt.run(
@@ -265,6 +286,9 @@ router.post('/', (req, res) => {
       finalImporte,
       finalEsTransferencia,
       finalCuentaDestino ? Number(finalCuentaDestino) : null,
+      finalPasivoId,
+      serie_id || null,
+      frecuencia_recurrencia || null,
       es_consolidado !== undefined ? Number(es_consolidado) : 1,
       etiqueta_especial || null,
       notas || ''
@@ -286,14 +310,21 @@ router.post('/', (req, res) => {
         c.nombre as cuenta_nombre, 
         cat.nombre as categoria_nombre,
         cd.nombre as cuenta_destino_nombre,
-        ci.nombre as cuenta_imputada_nombre
+        ci.nombre as cuenta_imputada_nombre,
+        p.nombre as pasivo_nombre
       FROM movimientos m
       JOIN categorias cat ON m.categoria_id = cat.id
       JOIN cuentas c ON m.cuenta_id = c.id
       LEFT JOIN cuentas cd ON m.cuenta_destino_id = cd.id
       LEFT JOIN cuentas ci ON m.cuenta_imputada_id = ci.id
+      LEFT JOIN prestamos_y_pasivos p ON m.pasivo_id = p.id
       WHERE m.id = ?
     `).get(info.lastInsertRowid);
+
+    // Sincronizar impacto en pasivo si se crea como consolidado
+    if (creado.pasivo_id && Number(creado.es_consolidado) === 1) {
+      applyMovimientoPasivoImpact(creado);
+    }
 
     res.status(201).json(creado);
   } catch (error) {
@@ -304,6 +335,16 @@ router.post('/', (req, res) => {
 // Actualizar movimiento
 router.put('/:id', (req, res) => {
   try {
+    const oldMov = db.prepare('SELECT * FROM movimientos WHERE id = ?').get(req.params.id);
+    if (!oldMov) {
+      return res.status(404).json({ error: 'Movimiento no encontrado' });
+    }
+
+    // Si el movimiento anterior estaba consolidado y vinculado a un pasivo, revertir su impacto antes de aplicar el nuevo
+    if (oldMov.pasivo_id && Number(oldMov.es_consolidado) === 1) {
+      reverseMovimientoPasivoImpact(oldMov);
+    }
+
     const {
       fecha,
       cuenta_id,
@@ -314,6 +355,10 @@ router.put('/:id', (req, res) => {
       importe,
       es_transferencia_interna,
       cuenta_destino_id,
+      pasivo_id,
+      serie_id,
+      frecuencia_recurrencia,
+      actualizar_posteriores_serie,
       es_consolidado,
       etiqueta_especial,
       notas
@@ -330,6 +375,9 @@ router.put('/:id', (req, res) => {
           importe = COALESCE(?, importe),
           es_transferencia_interna = COALESCE(?, es_transferencia_interna),
           cuenta_destino_id = COALESCE(?, cuenta_destino_id),
+          pasivo_id = ?,
+          serie_id = COALESCE(?, serie_id),
+          frecuencia_recurrencia = COALESCE(?, frecuencia_recurrencia),
           es_consolidado = COALESCE(?, es_consolidado),
           etiqueta_especial = COALESCE(?, etiqueta_especial),
           notas = COALESCE(?, notas)
@@ -346,11 +394,47 @@ router.put('/:id', (req, res) => {
       importe !== undefined ? Number(importe) : null,
       es_transferencia_interna !== undefined ? Number(es_transferencia_interna) : null,
       cuenta_destino_id,
+      pasivo_id !== undefined ? (pasivo_id ? Number(pasivo_id) : null) : oldMov.pasivo_id,
+      serie_id !== undefined ? serie_id : oldMov.serie_id,
+      frecuencia_recurrencia !== undefined ? frecuencia_recurrencia : oldMov.frecuencia_recurrencia,
       es_consolidado !== undefined ? Number(es_consolidado) : null,
       etiqueta_especial,
       notas,
       req.params.id
     );
+
+    // Si se solicita propagar cambios a los movimientos futuros previstos de la serie
+    const activeSerieId = serie_id || oldMov.serie_id;
+    if (actualizar_posteriores_serie && activeSerieId) {
+      const propStmt = db.prepare(`
+        UPDATE movimientos
+        SET categoria_id = COALESCE(?, categoria_id),
+            cuenta_id = COALESCE(?, cuenta_id),
+            cuenta_imputada_id = ?,
+            subcategoria = COALESCE(?, subcategoria),
+            concepto = COALESCE(?, concepto),
+            importe = COALESCE(?, importe),
+            pasivo_id = ?,
+            etiqueta_especial = COALESCE(?, etiqueta_especial),
+            notas = COALESCE(?, notas)
+        WHERE serie_id = ? AND id != ? AND fecha >= ? AND COALESCE(es_consolidado, 1) = 0
+      `);
+
+      propStmt.run(
+        categoria_id,
+        cuenta_id,
+        cuenta_imputada_id !== undefined ? (cuenta_imputada_id ? Number(cuenta_imputada_id) : null) : null,
+        subcategoria,
+        concepto,
+        importe !== undefined ? Number(importe) : null,
+        pasivo_id !== undefined ? (pasivo_id ? Number(pasivo_id) : null) : oldMov.pasivo_id,
+        etiqueta_especial,
+        notas,
+        activeSerieId,
+        req.params.id,
+        fecha || oldMov.fecha
+      );
+    }
 
     const actualizado = db.prepare(`
       SELECT 
@@ -361,16 +445,135 @@ router.put('/:id', (req, res) => {
         cat.color as categoria_color,
         cat.tipo as categoria_tipo,
         cd.nombre as cuenta_destino_nombre,
-        ci.nombre as cuenta_imputada_nombre
+        ci.nombre as cuenta_imputada_nombre,
+        p.nombre as pasivo_nombre
       FROM movimientos m
       JOIN categorias cat ON m.categoria_id = cat.id
       JOIN cuentas c ON m.cuenta_id = c.id
       LEFT JOIN cuentas cd ON m.cuenta_destino_id = cd.id
       LEFT JOIN cuentas ci ON m.cuenta_imputada_id = ci.id
+      LEFT JOIN prestamos_y_pasivos p ON m.pasivo_id = p.id
       WHERE m.id = ?
     `).get(req.params.id);
 
+    // Aplicar nuevo impacto sobre el pasivo si queda consolidado
+    if (actualizado.pasivo_id && Number(actualizado.es_consolidado) === 1) {
+      applyMovimientoPasivoImpact(actualizado);
+    }
+
     res.json(actualizado);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Convertir movimiento en serie repetitiva / Generar ocurrencias futuras
+router.post('/:id/convertir-en-serie', (req, res) => {
+  try {
+    const mov = db.prepare('SELECT * FROM movimientos WHERE id = ?').get(req.params.id);
+    if (!mov) return res.status(404).json({ error: 'Movimiento no encontrado' });
+
+    const {
+      frecuencia = 'mensual',
+      modo_fin = 'fecha_fin', // 'fecha_fin' | 'numero_cuotas' | 'solo_fin'
+      fecha_inicio = null,
+      fecha_fin = null,
+      numero_cuotas = 12,
+      eliminar_futuros_existentes = true
+    } = req.body;
+
+    // Asignar o mantener serie_id
+    let serieId = mov.serie_id;
+    if (!serieId) {
+      serieId = `serie_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      db.prepare('UPDATE movimientos SET serie_id = ?, frecuencia_recurrencia = ? WHERE id = ?')
+        .run(serieId, frecuencia, mov.id);
+      mov.serie_id = serieId;
+      mov.frecuencia_recurrencia = frecuencia;
+    } else {
+      db.prepare('UPDATE movimientos SET frecuencia_recurrencia = ? WHERE id = ?')
+        .run(frecuencia, mov.id);
+      mov.frecuencia_recurrencia = frecuencia;
+    }
+
+    const fechaBase = fecha_inicio || mov.fecha;
+
+    // Si se solicita limpiar futuros previos no consolidados de esta serie
+    if (eliminar_futuros_existentes) {
+      db.prepare(`
+        DELETE FROM movimientos 
+        WHERE serie_id = ? AND id != ? AND fecha >= ? AND COALESCE(es_consolidado, 1) = 0
+      `).run(serieId, mov.id, fechaBase);
+    }
+
+    const fechasFuturas = calcularFechasSerie({
+      fechaBase,
+      frecuencia,
+      modoFin: modo_fin,
+      fechaFin: fecha_fin,
+      numeroCuotas: Number(numeroCuotas),
+      incluirBase: false
+    });
+
+    const insertStmt = db.prepare(`
+      INSERT INTO movimientos (
+        usuario_id, fecha, cuenta_id, cuenta_imputada_id, categoria_id, subcategoria,
+        concepto, importe, es_transferencia_interna, cuenta_destino_id, pasivo_id,
+        serie_id, frecuencia_recurrencia, es_consolidado, etiqueta_especial, notas, origen_importacion
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 'Serie Recurrente')
+    `);
+
+    const generatedIds = [];
+    for (const f of fechasFuturas) {
+      // Evitar duplicar en la misma fecha para la misma serie
+      const existe = db.prepare('SELECT id FROM movimientos WHERE serie_id = ? AND fecha = ?').get(serieId, f);
+      if (!existe) {
+        const info = insertStmt.run(
+          mov.usuario_id || 1,
+          f,
+          mov.cuenta_id,
+          mov.cuenta_imputada_id || null,
+          mov.categoria_id,
+          mov.subcategoria || '',
+          mov.concepto,
+          mov.importe,
+          mov.es_transferencia_interna || 0,
+          mov.cuenta_destino_id || null,
+          mov.pasivo_id || null,
+          serieId,
+          frecuencia,
+          mov.etiqueta_especial || null,
+          mov.notas || null
+        );
+        generatedIds.push(info.lastInsertRowid);
+      }
+    }
+
+    res.json({
+      success: true,
+      serie_id: serieId,
+      frecuencia,
+      total_generados: generatedIds.length,
+      fechas: fechasFuturas
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Eliminar movimientos futuros de una serie
+router.delete('/:id/serie-futuros', (req, res) => {
+  try {
+    const mov = db.prepare('SELECT * FROM movimientos WHERE id = ?').get(req.params.id);
+    if (!mov) return res.status(404).json({ error: 'Movimiento no encontrado' });
+    if (!mov.serie_id) return res.status(400).json({ error: 'Este movimiento no forma parte de una serie' });
+
+    const info = db.prepare(`
+      DELETE FROM movimientos 
+      WHERE serie_id = ? AND id != ? AND fecha >= ? AND COALESCE(es_consolidado, 1) = 0
+    `).run(mov.serie_id, mov.id, mov.fecha);
+
+    res.json({ success: true, eliminados: info.changes });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -379,6 +582,9 @@ router.put('/:id', (req, res) => {
 // Toggle rápido de consolidación
 router.patch('/:id/toggle-consolidado', (req, res) => {
   try {
+    const movBefore = db.prepare('SELECT * FROM movimientos WHERE id = ?').get(req.params.id);
+    if (!movBefore) return res.status(404).json({ error: 'Movimiento no encontrado' });
+
     db.prepare(`
       UPDATE movimientos
       SET es_consolidado = CASE WHEN COALESCE(es_consolidado, 1) = 1 THEN 0 ELSE 1 END
@@ -393,13 +599,24 @@ router.patch('/:id/toggle-consolidado', (req, res) => {
         cat.nombre as categoria_nombre,
         cat.color as categoria_color,
         cat.tipo as categoria_tipo,
-        cd.nombre as cuenta_destino_nombre
+        cd.nombre as cuenta_destino_nombre,
+        p.nombre as pasivo_nombre
       FROM movimientos m
       JOIN categorias cat ON m.categoria_id = cat.id
       JOIN cuentas c ON m.cuenta_id = c.id
       LEFT JOIN cuentas cd ON m.cuenta_destino_id = cd.id
+      LEFT JOIN prestamos_y_pasivos p ON m.pasivo_id = p.id
       WHERE m.id = ?
     `).get(req.params.id);
+
+    // Sincronizar pasivo según cambio de estado
+    if (actualizado.pasivo_id) {
+      if (Number(actualizado.es_consolidado) === 1) {
+        applyMovimientoPasivoImpact(actualizado);
+      } else {
+        reverseMovimientoPasivoImpact(movBefore);
+      }
+    }
 
     res.json(actualizado);
   } catch (error) {
@@ -410,6 +627,11 @@ router.patch('/:id/toggle-consolidado', (req, res) => {
 // Eliminar movimiento
 router.delete('/:id', (req, res) => {
   try {
+    const mov = db.prepare('SELECT * FROM movimientos WHERE id = ?').get(req.params.id);
+    if (mov && mov.pasivo_id && Number(mov.es_consolidado) === 1) {
+      reverseMovimientoPasivoImpact(mov);
+    }
+
     db.prepare('DELETE FROM movimientos WHERE id = ?').run(req.params.id);
     res.json({ message: 'Movimiento eliminado con éxito' });
   } catch (error) {

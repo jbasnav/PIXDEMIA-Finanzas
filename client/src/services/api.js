@@ -196,6 +196,30 @@ export const api = {
     return res.json();
   },
 
+  async convertirEnSerie(id, params) {
+    const res = await fetch(`${API_BASE}/movimientos/${id}/convertir-en-serie`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al generar serie recurrente');
+    }
+    return res.json();
+  },
+
+  async deleteSerieFuturos(id) {
+    const res = await fetch(`${API_BASE}/movimientos/${id}/serie-futuros`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al eliminar futuros de la serie');
+    }
+    return res.json();
+  },
+
   async deleteMovimiento(id) {
     const res = await fetch(`${API_BASE}/movimientos/${id}`, {
       method: 'DELETE'

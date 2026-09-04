@@ -50,6 +50,9 @@ CREATE TABLE IF NOT EXISTS movimientos (
     importe REAL NOT NULL, -- Positivo para ingresos/abonos, Negativo para gastos/cargos
     es_transferencia_interna INTEGER DEFAULT 0 CHECK (es_transferencia_interna IN (0, 1)),
     cuenta_destino_id INTEGER REFERENCES cuentas(id),
+    pasivo_id INTEGER REFERENCES prestamos_y_pasivos(id), -- Vinculación con préstamo/pasivo si este movimiento amortiza deuda
+    serie_id TEXT, -- Identificador de la serie recurrente/periódica a la que pertenece
+    frecuencia_recurrencia TEXT, -- 'mensual', 'quincenal', 'semanal', 'bimestral', 'trimestral', 'semestral', 'anual'
     es_consolidado INTEGER DEFAULT 1 CHECK (es_consolidado IN (0, 1)), -- 1 = Consolidado (Real), 0 = Previsto / Sin Consolidar (Simulación)
     etiqueta_especial TEXT, -- 'Obra Local', 'Viaje Londres', 'Furgoneta', etc.
     notas TEXT,
