@@ -28,8 +28,8 @@ router.get('/', (req, res) => {
     let params = [usuarioId];
 
     if (cuenta_id) {
-      whereClauses.push('(m.cuenta_id = ? OR m.cuenta_destino_id = ? OR m.cuenta_imputada_id = ?)');
-      params.push(cuenta_id, cuenta_id, cuenta_id);
+      whereClauses.push('(m.cuenta_id = ? OR m.cuenta_destino_id = ?)');
+      params.push(cuenta_id, cuenta_id);
     }
 
     if (categoria_id) {

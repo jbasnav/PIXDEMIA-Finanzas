@@ -602,7 +602,7 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport, onOpenAcco
                   <tr>
                     <th 
                       onClick={() => handleSort('fecha')}
-                      className="w-[8%] py-2.5 px-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors select-none group"
+                      className="w-[7.5%] py-2.5 px-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors select-none group"
                       title="Ordenar por Fecha"
                     >
                       <div className="flex items-center space-x-0.5">
@@ -612,7 +612,7 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport, onOpenAcco
                     </th>
                     <th 
                       onClick={() => handleSort('estado')}
-                      className="w-[8%] py-2.5 px-1 text-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors select-none group"
+                      className="w-[5.5%] py-2.5 px-0.5 text-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors select-none group"
                       title="Ordenar por Estado (Real / Previsto)"
                     >
                       <div className="flex items-center justify-center space-x-0.5">
@@ -622,7 +622,7 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport, onOpenAcco
                     </th>
                     <th 
                       onClick={() => handleSort('cuenta')}
-                      className="w-[11%] py-2.5 px-1.5 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors select-none group"
+                      className="w-[10%] py-2.5 px-1.5 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors select-none group"
                       title="Ordenar por Cuenta / Banco"
                     >
                       <div className="flex items-center space-x-0.5">
@@ -652,7 +652,7 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport, onOpenAcco
                     </th>
                     <th 
                       onClick={() => handleSort('importe')}
-                      className="w-[11%] py-2.5 px-1.5 text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors select-none group"
+                      className="w-[10%] py-2.5 px-1.5 text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors select-none group"
                       title="Ordenar por Importe"
                     >
                       <div className="flex items-center justify-end space-x-0.5">
@@ -661,8 +661,8 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport, onOpenAcco
                       </div>
                     </th>
                     <th className="w-[11%] py-2.5 px-1.5 text-right" title="Saldo restante en esta cuenta tras el movimiento">Saldo Cta</th>
-                    <th className="w-[10%] py-2.5 px-1.5 text-right bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300" title="Saldo global acumulado líquido">Saldo Global</th>
-                    <th className="w-[4%] py-2.5 px-1 text-center"></th>
+                    <th className="w-[13%] py-2.5 px-1.5 text-right bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300" title="Saldo global acumulado líquido">Saldo Global</th>
+                    <th className="w-[6%] py-2.5 px-1 text-center" title="Acciones de edición">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 font-medium text-[11px]">

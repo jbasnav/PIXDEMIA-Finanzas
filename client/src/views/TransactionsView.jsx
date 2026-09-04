@@ -327,7 +327,7 @@ export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refresh
               <tr className="bg-slate-50 dark:bg-slate-800/60 text-[10px] xl:text-[11px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200 dark:border-slate-800 select-none">
                 <th 
                   onClick={() => handleSort('fecha')}
-                  className="w-[8%] py-2.5 px-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group"
+                  className="w-[7.5%] py-2.5 px-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group"
                   title="Ordenar por Fecha"
                 >
                   <div className="flex items-center space-x-0.5">
@@ -337,7 +337,7 @@ export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refresh
                 </th>
                 <th 
                   onClick={() => handleSort('estado')}
-                  className="w-[8%] py-2.5 px-1 text-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors select-none group"
+                  className="w-[5.5%] py-2.5 px-0.5 text-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors select-none group"
                   title="Ordenar por Estado (Real / Previsto)"
                 >
                   <div className="flex items-center justify-center space-x-0.5">
@@ -347,7 +347,7 @@ export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refresh
                 </th>
                 <th 
                   onClick={() => handleSort('cuenta')}
-                  className="w-[11%] py-2.5 px-1.5 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group"
+                  className="w-[10%] py-2.5 px-1.5 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group"
                   title="Ordenar por Cuenta"
                 >
                   <div className="flex items-center space-x-0.5">
@@ -357,7 +357,7 @@ export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refresh
                 </th>
                 <th 
                   onClick={() => handleSort('concepto')}
-                  className="w-[22%] py-2.5 px-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group"
+                  className="w-[23%] py-2.5 px-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group"
                   title="Ordenar por Concepto / Tienda"
                 >
                   <div className="flex items-center space-x-0.5">
@@ -377,7 +377,7 @@ export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refresh
                 </th>
                 <th 
                   onClick={() => handleSort('proyecto')}
-                  className="w-[8%] py-2.5 px-1 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group"
+                  className="w-[7%] py-2.5 px-1 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group"
                   title="Ordenar por Proyecto"
                 >
                   <div className="flex items-center space-x-0.5">
@@ -387,7 +387,7 @@ export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refresh
                 </th>
                 <th 
                   onClick={() => handleSort('importe')}
-                  className="w-[10%] py-2.5 px-1.5 text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group"
+                  className="w-[9.5%] py-2.5 px-1.5 text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group"
                   title="Ordenar por Importe"
                 >
                   <div className="flex items-center justify-end space-x-0.5">
@@ -395,9 +395,9 @@ export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refresh
                     {renderSortIcon('importe')}
                   </div>
                 </th>
-                <th className="w-[10%] py-2.5 px-1.5 text-right" title="Saldo restante en esta cuenta tras el movimiento">Saldo Cta</th>
-                <th className="w-[8%] py-2.5 px-1.5 text-right bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300" title="Saldo global acumulado líquido">Saldo Global</th>
-                <th className="w-[3%] py-2.5 px-1 text-center"></th>
+                <th className="w-[9%] py-2.5 px-1.5 text-right" title="Saldo restante en esta cuenta tras el movimiento">Saldo Cta</th>
+                <th className="w-[10.5%] py-2.5 px-1.5 text-right bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300" title="Saldo global acumulado líquido">Saldo Global</th>
+                <th className="w-[6%] py-2.5 px-1 text-center" title="Acciones de edición y eliminación">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-[11px]">
