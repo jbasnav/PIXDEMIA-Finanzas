@@ -14,12 +14,14 @@ const {
 // Consultar Historial Oficial del Euríbor
 router.get('/consultar-euribor-historico', (req, res) => {
   try {
+    const tipoIndice = req.query.tipoIndice || req.query.indice || 'Euríbor 12M';
     const anoInicio = parseInt(req.query.anoInicio) || 2015;
     const anoFin = parseInt(req.query.anoFin) || 2026;
     const mesRevision = req.query.mesRevision || 'Julio';
     const diferencial = parseFloat(req.query.diferencial) || 0.75;
 
     const historial = generarHistorialEuriborCompleto({
+      tipoIndice,
       anoInicio,
       anoFin,
       mesRevision,
@@ -27,6 +29,7 @@ router.get('/consultar-euribor-historico', (req, res) => {
     });
 
     res.json({
+      tipoIndice,
       anoInicio,
       anoFin,
       mesRevision,
@@ -248,6 +251,7 @@ router.post('/', (req, res) => {
       interes_nominal_anual = 0,
       tipo_interes_modalidad = 'variable',
       diferencial_euribor = 0,
+      indice_referencia = 'Euríbor 12M',
       historial_intereses_json = '[]',
       mes_revision = 'Julio',
       frecuencia_revision = 'Anual',
@@ -270,10 +274,10 @@ router.post('/', (req, res) => {
     const stmt = db.prepare(`
       INSERT INTO prestamos_y_pasivos (
         nombre, capital_inicial, capital_pendiente, cuota_mensual,
-        interes_nominal_anual, tipo_interes_modalidad, diferencial_euribor,
+        interes_nominal_anual, tipo_interes_modalidad, diferencial_euribor, indice_referencia,
         historial_intereses_json, mes_revision, frecuencia_revision, proxima_revision_fecha,
         fecha_inicio, fecha_fin_prevista, fecha_actualizacion_saldo, tipo, notas
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const info = stmt.run(
@@ -284,6 +288,7 @@ router.post('/', (req, res) => {
       Number(interes_nominal_anual),
       tipo_interes_modalidad,
       Number(diferencial_euribor || 0),
+      indice_referencia || 'Euríbor 12M',
       jsonStr,
       mes_revision || 'Julio',
       frecuencia_revision || 'Anual',
@@ -313,6 +318,7 @@ router.put('/:id', (req, res) => {
       interes_nominal_anual,
       tipo_interes_modalidad,
       diferencial_euribor,
+      indice_referencia,
       historial_intereses_json,
       mes_revision,
       frecuencia_revision,
@@ -337,6 +343,7 @@ router.put('/:id', (req, res) => {
           interes_nominal_anual = COALESCE(?, interes_nominal_anual),
           tipo_interes_modalidad = COALESCE(?, tipo_interes_modalidad),
           diferencial_euribor = COALESCE(?, diferencial_euribor),
+          indice_referencia = COALESCE(?, indice_referencia),
           historial_intereses_json = COALESCE(?, historial_intereses_json),
           mes_revision = COALESCE(?, mes_revision),
           frecuencia_revision = COALESCE(?, frecuencia_revision),
@@ -357,6 +364,7 @@ router.put('/:id', (req, res) => {
       interes_nominal_anual !== undefined ? Number(interes_nominal_anual) : null,
       tipo_interes_modalidad,
       diferencial_euribor !== undefined ? Number(diferencial_euribor) : null,
+      indice_referencia,
       jsonStr,
       mes_revision,
       frecuencia_revision,

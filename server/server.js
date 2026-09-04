@@ -31,6 +31,7 @@ app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/suscripciones', require('./routes/suscripciones'));
 app.use('/api/alimentacion', require('./routes/alimentacion'));
 app.use('/api/import', require('./routes/import'));
+app.use('/api/backup', require('./routes/backup'));
 
 // Endpoint directo POST /api/import-excel requerido
 const upload = multer({ storage: multer.memoryStorage() });

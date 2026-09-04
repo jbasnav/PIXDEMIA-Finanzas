@@ -12,7 +12,8 @@ import {
   Sun,
   ShieldCheck,
   Users,
-  ChevronDown
+  ChevronDown,
+  Database
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -24,6 +25,7 @@ export default function Navbar({
   onOpenImport,
   onOpenAccountsManager,
   onOpenUsersManager,
+  onOpenBackupManager,
   currentUser
 }) {
   const navItems = [
@@ -105,6 +107,16 @@ export default function Navbar({
             >
               <Landmark className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               <span>Cuentas</span>
+            </button>
+
+            {/* Botón Copias de Seguridad */}
+            <button
+              onClick={onOpenBackupManager}
+              className="hidden xl:flex items-center space-x-1.5 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors border border-slate-200 dark:border-slate-700"
+              title="Copias de Seguridad (Backup & Restore)"
+            >
+              <Database className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+              <span>Backup</span>
             </button>
 
             {/* Botón Importar Excel */}

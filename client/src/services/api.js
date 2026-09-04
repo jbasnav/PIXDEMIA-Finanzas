@@ -423,5 +423,63 @@ export const api = {
       throw new Error(err.error || 'Error al importar archivo Excel');
     }
     return res.json();
+  },
+
+  // Copias de Seguridad y Restauración (Backups)
+  async exportBackup() {
+    const res = await fetch(`${API_BASE}/backup/export`, {
+      headers: getHeaders()
+    });
+    if (!res.ok) throw new Error('Error al exportar copia de seguridad');
+    return res.json();
+  },
+
+  async restoreBackup(backupData) {
+    const res = await fetch(`${API_BASE}/backup/restore`, {
+      method: 'POST',
+      headers: {
+        ...getHeaders(),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(backupData)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al restaurar copia de seguridad');
+    }
+    return res.json();
+  },
+
+  async getBackupSnapshots() {
+    const res = await fetch(`${API_BASE}/backup/snapshots`, {
+      headers: getHeaders()
+    });
+    if (!res.ok) throw new Error('Error al obtener instantáneas');
+    return res.json();
+  },
+
+  async createBackupSnapshot() {
+    const res = await fetch(`${API_BASE}/backup/create-snapshot`, {
+      method: 'POST',
+      headers: getHeaders()
+    });
+    if (!res.ok) throw new Error('Error al crear instantánea');
+    return res.json();
+  },
+
+  async restoreBackupSnapshot(filename) {
+    const res = await fetch(`${API_BASE}/backup/restore-snapshot`, {
+      method: 'POST',
+      headers: {
+        ...getHeaders(),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ filename })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al restaurar instantánea');
+    }
+    return res.json();
   }
 };

@@ -161,6 +161,7 @@ function initSchemaAndSeeds() {
   const alterColumns = [
     'ALTER TABLE prestamos_y_pasivos ADD COLUMN tipo_interes_modalidad TEXT DEFAULT "variable"',
     'ALTER TABLE prestamos_y_pasivos ADD COLUMN diferencial_euribor REAL DEFAULT 0.0',
+    'ALTER TABLE prestamos_y_pasivos ADD COLUMN indice_referencia TEXT DEFAULT "Euríbor 12M"',
     'ALTER TABLE prestamos_y_pasivos ADD COLUMN historial_intereses_json TEXT DEFAULT "[]"',
     'ALTER TABLE prestamos_y_pasivos ADD COLUMN fecha_actualizacion_saldo TEXT',
     'ALTER TABLE prestamos_y_pasivos ADD COLUMN mes_revision TEXT DEFAULT "Julio"',

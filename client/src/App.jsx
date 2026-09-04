@@ -4,6 +4,7 @@ import QuickTransactionModal from './components/QuickTransactionModal';
 import ImportModal from './components/ImportModal';
 import UsersManagerModal from './components/UsersManagerModal';
 import AccountsManagerModal from './components/AccountsManagerModal';
+import BackupManagerModal from './components/BackupManagerModal';
 import DashboardView from './views/DashboardView';
 import TransactionsView from './views/TransactionsView';
 import ProjectsView from './views/ProjectsView';
@@ -25,6 +26,7 @@ export default function App() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isUsersModalOpen, setIsUsersModalOpen] = useState(false);
   const [isAccountsModalOpen, setIsAccountsModalOpen] = useState(false);
+  const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const [currentUser, setCurrentUser] = useState(null);
@@ -91,6 +93,7 @@ export default function App() {
         onOpenImport={() => setIsImportOpen(true)}
         onOpenAccountsManager={() => setIsAccountsModalOpen(true)}
         onOpenUsersManager={() => setIsUsersModalOpen(true)}
+        onOpenBackupManager={() => setIsBackupModalOpen(true)}
       />
 
       {/* Contenido Principal de la SPA */}
@@ -166,6 +169,13 @@ export default function App() {
         isOpen={isAccountsModalOpen}
         onClose={() => setIsAccountsModalOpen(false)}
         onAccountsUpdated={handleDataChanged}
+      />
+
+      {/* Modal de Copias de Seguridad (Backup & Restore) */}
+      <BackupManagerModal
+        isOpen={isBackupModalOpen}
+        onClose={() => setIsBackupModalOpen(false)}
+        onDataRestored={handleDataChanged}
       />
 
       {/* Pie de Página */}

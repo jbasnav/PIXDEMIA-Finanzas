@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS prestamos_y_pasivos (
     interes_nominal_anual REAL NOT NULL DEFAULT 0.0,
     tipo_interes_modalidad TEXT DEFAULT 'variable', -- 'fijo', 'variable', 'cero'
     diferencial_euribor REAL DEFAULT 0.0,
+    indice_referencia TEXT DEFAULT 'Euríbor 12M', -- 'Euríbor 12M', 'Euríbor 6M', 'IRPH Entidades', 'Míbor', etc.
     historial_intereses_json TEXT DEFAULT '[]', -- Historial de tipos de interés por año
     mes_revision TEXT DEFAULT 'Julio', -- Mes en el que se aplica la revisión de la hipoteca
     frecuencia_revision TEXT DEFAULT 'Anual', -- 'Anual', 'Semestral', 'Trimestral'

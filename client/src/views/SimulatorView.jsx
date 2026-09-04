@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Calculator, 
   Truck, 
@@ -64,6 +64,16 @@ import { formatCurrency, formatPercent, formatDate, MONTHS } from '../utils/form
 import { api } from '../services/api';
 import CuadroAmortizacionModal from '../components/CuadroAmortizacionModal';
 
+// Índices de referencia oficiales y personalizables
+export const INDICES_REFERENCIA = [
+  { id: 'Euríbor 12M', label: 'Euríbor 12M (Oficial BdE / Anual)' },
+  { id: 'Euríbor 6M', label: 'Euríbor 6 Meses (Semestral)' },
+  { id: 'Euríbor 3M', label: 'Euríbor 3 Meses (Trimestral)' },
+  { id: 'IRPH Entidades', label: 'IRPH Conjunto de Entidades (BdE)' },
+  { id: 'Míbor', label: 'Míbor (Histórico)' },
+  { id: 'personalizado', label: 'Personalizado / Otro...' }
+];
+
 // Presets para configuración rápida
 const PRESETS_PASIVO = [
   { id: 'hipoteca', label: 'Hipoteca Vivienda', tipo: 'hipoteca', icon: Home, defaultCap: 180000, defaultPlazo: 25, defaultModalidad: 'variable', defaultInteres: 1.85, defaultDif: 0.75, defaultMesRev: 'Julio' },
@@ -117,6 +127,7 @@ export default function SimulatorView() {
     tipo_interes_modalidad: 'variable', // 'cero' | 'variable' | 'fijo'
     interes_nominal_anual: 1.85,
     diferencial_euribor: 0.75,
+    indice_referencia: 'Euríbor 12M',
     mes_revision: 'Julio',
     frecuencia_revision: 'Anual',
     proxima_revision_fecha: '2026-07-01',
@@ -189,11 +200,11 @@ export default function SimulatorView() {
   }, [selectedPasivoId, amortizacionExtra, modalidadAmort, nuevoInteresAmort, esViviendaHabitual, regimenFiscal, pasivos]);
 
   // ========================================================
-  // CÁLCULOS MATEMÁTICOS BIDIRECCIONALES (PLAZO <-> CUOTA)
+  // CÁLCULOS MATEMÁTICOS BIDIRECCIONALES & TRAYECTORIA HISTÓRICA
   // ========================================================
-  const computeCuotaMensual = (capital, interesNominal, modalidad, plazoAnos) => {
+  const computeCuotaMensual = (capital, interesNominal, modalidad, plazoAnos, totalMeses = null) => {
     const cap = Number(capital) || 0;
-    const meses = Math.max(1, (Number(plazoAnos) || 1) * 12);
+    const meses = totalMeses ? Math.max(1, totalMeses) : Math.max(1, Math.round((Number(plazoAnos) || 1) * 12));
     if (cap <= 0) return 0;
     if (modalidad === 'cero' || Number(interesNominal) === 0) {
       return Number((cap / meses).toFixed(2));
@@ -222,21 +233,179 @@ export default function SimulatorView() {
     return Math.max(1, Math.min(40, Math.round(nMeses / 12) || 1));
   };
 
-  const computeFechaFinStr = (fechaInicio, plazoAnos, baseCalculo = 'saldo_vivo') => {
-    if (baseCalculo === 'saldo_vivo') {
-      const currentYear = new Date().getFullYear();
-      const parts = String(fechaInicio || '').split('-').map(Number);
-      const mStr = String(parts[1] || 12).padStart(2, '0');
-      const dStr = String(parts[2] || 31).padStart(2, '0');
-      return `${currentYear + Number(plazoAnos)}-${mStr}-${dStr}`;
+  const computeHistoricalSchedule = (form, historyList) => {
+    if (!historyList || historyList.length === 0) return [];
+    
+    const sorted = [...historyList].sort((a, b) => (Number(a.ano) || 0) - (Number(b.ano) || 0));
+    const startYear = form.fecha_inicio ? (parseInt(form.fecha_inicio.split('-')[0]) || sorted[0]?.ano || 2015) : (sorted[0]?.ano || 2015);
+    
+    let totalMonths = 0;
+    if (form.fecha_inicio && form.fecha_fin_prevista) {
+      const p1 = String(form.fecha_inicio).split('-').map(Number);
+      const p2 = String(form.fecha_fin_prevista).split('-').map(Number);
+      if (p1[0] && p2[0]) {
+        const diff = (p2[0] - p1[0]) * 12 + ((p2[1] || 1) - (p1[1] || 1));
+        if (diff > 0) totalMonths = diff;
+      }
     }
+    if (!totalMonths) {
+      totalMonths = Math.max(12, Math.round((Number(form.plazoAnos) || 25) * 12));
+    }
+
+    let runningCap = (Number(form.capital_inicial) > 0) 
+      ? Number(form.capital_inicial) 
+      : (Number(form.capital_pendiente) || 150000);
+
+    return sorted.map((item, idx) => {
+      const itemYear = Number(item.ano) || (startYear + idx);
+      const elapsedMonths = Math.max(0, (itemYear - startYear) * 12);
+      const remainingMonths = Math.max(1, totalMonths - elapsedMonths);
+
+      const tin = (item.interes !== undefined && item.interes !== '' && !isNaN(Number(item.interes)))
+        ? Number(item.interes)
+        : Number((Number(item.euribor || item.indice || 0) + Number(item.diferencial || 0)).toFixed(2));
+
+      const r = (tin / 100) / 12;
+      let cuotaEstimada = 0;
+
+      if (runningCap <= 0) {
+        cuotaEstimada = 0;
+      } else if (r === 0) {
+        cuotaEstimada = runningCap / remainingMonths;
+      } else {
+        const factor = Math.pow(1 + r, remainingMonths);
+        cuotaEstimada = (runningCap * r * factor) / (factor - 1);
+      }
+
+      cuotaEstimada = Number(cuotaEstimada.toFixed(2));
+      
+      const tieneCuotaManual = (item.cuota !== undefined && item.cuota !== '' && item.cuota !== null && !isNaN(Number(item.cuota)) && Number(item.cuota) > 0);
+      const cuotaEfectiva = tieneCuotaManual ? Number(item.cuota) : cuotaEstimada;
+
+      const capInicio = runningCap;
+
+      // Amortizar 12 meses de este año (o los meses restantes)
+      const monthsToAmortize = Math.min(12, remainingMonths);
+      for (let m = 0; m < monthsToAmortize; m++) {
+        if (runningCap <= 0) break;
+        const interesMes = runningCap * r;
+        const amortCapital = Math.min(runningCap, Math.max(0, cuotaEfectiva - interesMes));
+        runningCap = Math.max(0, runningCap - amortCapital);
+      }
+
+      return {
+        ...item,
+        ano: itemYear,
+        interes: tin,
+        capitalInicio: Number(capInicio.toFixed(2)),
+        capitalFin: Number(runningCap.toFixed(2)),
+        mesesRestantes: remainingMonths,
+        cuotaEstimada,
+        cuotaEfectiva,
+        tieneCuotaManual
+      };
+    });
+  };
+
+  const computeFechaFinStr = (fechaInicio, plazoAnos, baseCalculo = 'saldo_vivo') => {
+    const pAnos = Number(plazoAnos) || 1;
+    if (baseCalculo === 'saldo_vivo') {
+      const now = new Date();
+      let startYear = now.getFullYear();
+      let startMonth = now.getMonth() + 1;
+      let startDay = now.getDate();
+
+      if (fechaInicio) {
+        const parts = String(fechaInicio).split('-').map(Number);
+        if (parts[0] && parts[0] > startYear) {
+          startYear = parts[0];
+          startMonth = parts[1] || 1;
+          startDay = parts[2] || 1;
+        }
+      }
+
+      const endYear = startYear + Math.floor(pAnos);
+      const extraMonths = Math.round((pAnos - Math.floor(pAnos)) * 12);
+      let endMonth = startMonth + extraMonths;
+      let finalYear = endYear;
+      if (endMonth > 12) {
+        finalYear += Math.floor((endMonth - 1) / 12);
+        endMonth = ((endMonth - 1) % 12) + 1;
+      }
+      return `${finalYear}-${String(endMonth).padStart(2, '0')}-${String(startDay).padStart(2, '0')}`;
+    }
+
     if (!fechaInicio) return '';
     const parts = String(fechaInicio).split('-').map(Number);
     if (parts.length < 2 || !parts[0] || !parts[1]) return '';
-    const newY = parts[0] + Number(plazoAnos);
-    const mStr = String(parts[1]).padStart(2, '0');
-    const dStr = String(parts[2] || 28).padStart(2, '0');
-    return `${newY}-${mStr}-${dStr}`;
+    const newY = parts[0] + Math.floor(pAnos);
+    const extraMonths = Math.round((pAnos - Math.floor(pAnos)) * 12);
+    let m = (parts[1] || 1) + extraMonths;
+    let finalY = newY;
+    if (m > 12) {
+      finalY += Math.floor((m - 1) / 12);
+      m = ((m - 1) % 12) + 1;
+    }
+    const dStr = String(parts[2] || 1).padStart(2, '0');
+    return `${finalY}-${String(m).padStart(2, '0')}-${dStr}`;
+  };
+
+  const handleFechaFinChange = (newFechaFin) => {
+    if (!newFechaFin) {
+      setFormUnified(prev => ({ ...prev, fecha_fin_prevista: '' }));
+      return;
+    }
+
+    const endParts = String(newFechaFin).split('-').map(Number);
+    if (endParts.length < 3 || !endParts[0] || !endParts[1]) {
+      setFormUnified(prev => ({ ...prev, fecha_fin_prevista: newFechaFin }));
+      return;
+    }
+
+    const endDate = new Date(endParts[0], endParts[1] - 1, endParts[2] || 1);
+    
+    // Determine reference start date
+    let startDate;
+    if (formUnified.baseCalculo === 'capital_inicial' && formUnified.fecha_inicio) {
+      const startParts = String(formUnified.fecha_inicio).split('-').map(Number);
+      startDate = new Date(startParts[0], (startParts[1] || 1) - 1, startParts[2] || 1);
+    } else {
+      const now = new Date();
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      if (formUnified.fecha_inicio) {
+        const startParts = String(formUnified.fecha_inicio).split('-').map(Number);
+        const fIni = new Date(startParts[0], (startParts[1] || 1) - 1, startParts[2] || 1);
+        if (fIni > startDate) startDate = fIni;
+      }
+    }
+
+    let diffMonths = (endDate.getFullYear() - startDate.getFullYear()) * 12 + (endDate.getMonth() - startDate.getMonth());
+    if (diffMonths <= 0) diffMonths = 1;
+
+    const plazoAnos = Math.max(1, Math.min(40, Math.round(diffMonths / 12 * 10) / 10));
+
+    const baseCap = (formUnified.baseCalculo === 'capital_inicial')
+      ? (Number(formUnified.capital_inicial) || 0)
+      : (Number(formUnified.capital_pendiente) || Number(formUnified.capital_inicial) || 0);
+
+    const intVal = formUnified.tipo_interes_modalidad === 'cero' ? 0 : (Number(formUnified.interes_nominal_anual) || 0);
+    const nuevaCuota = computeCuotaMensual(baseCap, intVal, formUnified.tipo_interes_modalidad, plazoAnos, diffMonths);
+
+    setFormUnified(prev => ({
+      ...prev,
+      fecha_fin_prevista: newFechaFin,
+      plazoAnos: Math.max(1, Math.round(plazoAnos)),
+      cuota_mensual: nuevaCuota
+    }));
+  };
+
+  const handleFechaInicioChange = (newFechaInicio) => {
+    const fFin = computeFechaFinStr(newFechaInicio, formUnified.plazoAnos, formUnified.baseCalculo);
+    setFormUnified(prev => ({
+      ...prev,
+      fecha_inicio: newFechaInicio,
+      fecha_fin_prevista: fFin || prev.fecha_fin_prevista
+    }));
   };
 
   const handlePlazoChange = (newPlazo) => {
@@ -404,14 +573,15 @@ export default function SimulatorView() {
       tipo_interes_modalidad: preset.defaultModalidad,
       interes_nominal_anual: preset.defaultInteres,
       diferencial_euribor: preset.defaultDif,
+      indice_referencia: 'Euríbor 12M',
       mes_revision: preset.defaultMesRev,
       frecuencia_revision: 'Anual',
       proxima_revision_fecha: '',
       notas: '',
       historialIntereses: preset.defaultModalidad === 'variable' ? [
-        { ano: 2024, euribor: 3.53, diferencial: preset.defaultDif, interes: 3.53 + preset.defaultDif, notas: 'Pico ciclo' },
-        { ano: 2025, euribor: 2.05, diferencial: preset.defaultDif, interes: 2.05 + preset.defaultDif, notas: 'Bajadas' },
-        { ano: 2026, euribor: 1.10, diferencial: preset.defaultDif, interes: 1.10 + preset.defaultDif, notas: 'Revisión actual' }
+        { ano: 2024, euribor: 3.53, indice: 3.53, diferencial: preset.defaultDif, interes: 3.53 + preset.defaultDif, notas: 'Pico ciclo' },
+        { ano: 2025, euribor: 2.05, indice: 2.05, diferencial: preset.defaultDif, interes: 2.05 + preset.defaultDif, notas: 'Bajadas' },
+        { ano: 2026, euribor: 1.10, indice: 1.10, diferencial: preset.defaultDif, interes: 1.10 + preset.defaultDif, notas: 'Revisión actual' }
       ] : []
     });
   };
@@ -423,14 +593,16 @@ export default function SimulatorView() {
     let hist = (p.historialIntereses && p.historialIntereses.length > 0)
       ? p.historialIntereses.map(h => ({
           ano: h.ano || 2026,
-          euribor: h.euribor !== undefined ? h.euribor : Math.max(0, Number(((h.interes || p.interes_nominal_anual) - (p.diferencial_euribor || 0.75)).toFixed(2))),
+          euribor: h.euribor !== undefined ? h.euribor : (h.indice !== undefined ? h.indice : Math.max(0, Number(((h.interes || p.interes_nominal_anual) - (p.diferencial_euribor || 0.75)).toFixed(2)))),
           diferencial: h.diferencial !== undefined ? h.diferencial : (p.diferencial_euribor || 0.75),
           interes: h.interes !== undefined ? h.interes : p.interes_nominal_anual,
+          cuota: h.cuota !== undefined && h.cuota !== null ? Number(h.cuota) : undefined,
           notas: h.notas || ''
         }))
       : [{
           ano: 2026,
           euribor: Math.max(0, Number((p.interes_nominal_anual - (p.diferencial_euribor || 0.75)).toFixed(2))),
+          indice: Math.max(0, Number((p.interes_nominal_anual - (p.diferencial_euribor || 0.75)).toFixed(2))),
           diferencial: p.diferencial_euribor || 0.75,
           interes: p.interes_nominal_anual,
           notas: 'Tipo actual'
@@ -462,6 +634,7 @@ export default function SimulatorView() {
       tipo_interes_modalidad: mod,
       interes_nominal_anual: p.interes_nominal_anual,
       diferencial_euribor: p.diferencial_euribor !== undefined ? p.diferencial_euribor : 0.75,
+      indice_referencia: p.indice_referencia || 'Euríbor 12M',
       mes_revision: p.mes_revision || 'Julio',
       frecuencia_revision: p.frecuencia_revision || 'Anual',
       proxima_revision_fecha: p.proxima_revision_fecha || '',
@@ -472,7 +645,7 @@ export default function SimulatorView() {
     setActiveTab('diseñador_integral');
   };
 
-  // Auto-cargar Euríbor oficial
+  // Auto-cargar índice oficial (Euríbor, IRPH, etc.)
   const handleConsultarEuriborOficial = async () => {
     try {
       setLoadingEuribor(true);
@@ -480,8 +653,10 @@ export default function SimulatorView() {
       const endYear = 2026;
       const mesRev = formUnified.mes_revision || 'Julio';
       const dif = Number(formUnified.diferencial_euribor) || 0.75;
+      const tipoIndice = formUnified.indice_referencia || 'Euríbor 12M';
 
       const res = await api.consultarEuriborHistorico({
+        tipoIndice,
         anoInicio: startYear,
         anoFin: endYear,
         mesRevision: mesRev,
@@ -497,7 +672,7 @@ export default function SimulatorView() {
         }));
       }
     } catch (err) {
-      alert('Error consultando el Euríbor oficial: ' + err.message);
+      alert('Error consultando el índice oficial: ' + err.message);
     } finally {
       setLoadingEuribor(false);
     }
@@ -509,8 +684,8 @@ export default function SimulatorView() {
       : 2025;
     
     const dif = Number(formUnified.diferencial_euribor) || 0.75;
-    const defaultEuribor = 1.10;
-    const totalTIN = Number((defaultEuribor + dif).toFixed(2));
+    const defaultVal = 1.10;
+    const totalTIN = Number((defaultVal + dif).toFixed(2));
 
     setFormUnified({
       ...formUnified,
@@ -518,7 +693,8 @@ export default function SimulatorView() {
         ...formUnified.historialIntereses,
         { 
           ano: lastYear + 1, 
-          euribor: defaultEuribor,
+          euribor: defaultVal,
+          indice: defaultVal,
           diferencial: dif,
           interes: totalTIN, 
           notas: `Revisión ${lastYear + 1}` 
@@ -534,16 +710,29 @@ export default function SimulatorView() {
 
   const handleUpdateInterestItem = (index, field, value) => {
     const updated = [...formUnified.historialIntereses];
-    const currentItem = { ...updated[index], [field]: value };
+    const currentItem = { ...updated[index] };
 
-    if (field === 'euribor' || field === 'diferencial') {
-      const eVal = field === 'euribor' ? parseFloat(value) || 0 : (parseFloat(currentItem.euribor) || 0);
-      const dVal = field === 'diferencial' ? parseFloat(value) || 0 : (parseFloat(currentItem.diferencial) || 0);
+    if (field === 'cuota') {
+      if (value === '' || value === null || isNaN(parseFloat(value))) {
+        delete currentItem.cuota;
+      } else {
+        currentItem.cuota = parseFloat(value);
+      }
+    } else {
+      currentItem[field] = value;
+    }
+
+    if (field === 'euribor' || field === 'indice' || field === 'diferencial') {
+      const eVal = (field === 'euribor' || field === 'indice') ? (parseFloat(value) || 0) : (parseFloat(currentItem.euribor || currentItem.indice) || 0);
+      const dVal = field === 'diferencial' ? (parseFloat(value) || 0) : (parseFloat(currentItem.diferencial) || 0);
+      currentItem.euribor = eVal;
+      currentItem.indice = eVal;
       currentItem.interes = Number((eVal + dVal).toFixed(2));
     } else if (field === 'interes') {
       const iVal = parseFloat(value) || 0;
       const dVal = parseFloat(currentItem.diferencial) || 0;
       currentItem.euribor = Number(Math.max(0, iVal - dVal).toFixed(2));
+      currentItem.indice = currentItem.euribor;
     }
 
     updated[index] = currentItem;
@@ -561,6 +750,17 @@ export default function SimulatorView() {
     });
   };
 
+  const handleResetCuotaItem = (index) => {
+    const updated = [...formUnified.historialIntereses];
+    const item = { ...updated[index] };
+    delete item.cuota;
+    updated[index] = item;
+    setFormUnified({
+      ...formUnified,
+      historialIntereses: updated
+    });
+  };
+
   // Guardar Pasivo desde el Diseñador Unificado
   const handleSaveUnifiedPasivo = async (e) => {
     e.preventDefault();
@@ -574,6 +774,7 @@ export default function SimulatorView() {
         cuota_mensual: Number(formUnified.cuota_mensual),
         interes_nominal_anual: isCero ? 0 : Number(formUnified.interes_nominal_anual),
         diferencial_euribor: isCero ? 0 : Number(formUnified.diferencial_euribor),
+        indice_referencia: isCero ? '' : (formUnified.indice_referencia || 'Euríbor 12M'),
         historial_intereses_json: isCero ? '[]' : JSON.stringify(formUnified.historialIntereses)
       };
 
@@ -663,6 +864,18 @@ export default function SimulatorView() {
   }
 
   const resUnificado = simulacionUnificada?.resultados || {};
+
+  // Trayectoria histórica anual y cuotas resultantes para la hipoteca
+  const historicalSchedule = useMemo(() => {
+    return computeHistoricalSchedule(formUnified, formUnified.historialIntereses);
+  }, [
+    formUnified.historialIntereses, 
+    formUnified.capital_inicial, 
+    formUnified.capital_pendiente, 
+    formUnified.fecha_inicio, 
+    formUnified.fecha_fin_prevista, 
+    formUnified.plazoAnos
+  ]);
 
   return (
     <div className="space-y-6 pb-12">
@@ -952,12 +1165,8 @@ export default function SimulatorView() {
                     type="date"
                     required
                     value={formUnified.fecha_inicio}
-                    onChange={(e) => {
-                      const fIni = e.target.value;
-                      const fFin = computeFechaFinStr(fIni, formUnified.plazoAnos, formUnified.baseCalculo);
-                      setFormUnified({ ...formUnified, fecha_inicio: fIni, fecha_fin_prevista: fFin || formUnified.fecha_fin_prevista });
-                    }}
-                    className="w-full px-3 py-2 text-xs sm:text-sm rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                    onChange={(e) => handleFechaInicioChange(e.target.value)}
+                    className="w-full px-3 py-2 text-xs sm:text-sm rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium"
                   />
                 </div>
 
@@ -968,8 +1177,8 @@ export default function SimulatorView() {
                   <input
                     type="date"
                     value={formUnified.fecha_fin_prevista}
-                    onChange={(e) => setFormUnified({ ...formUnified, fecha_fin_prevista: e.target.value })}
-                    className="w-full px-3 py-2 text-xs sm:text-sm rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                    onChange={(e) => handleFechaFinChange(e.target.value)}
+                    className="w-full px-3 py-2 text-xs sm:text-sm rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold"
                   />
                 </div>
               </div>
@@ -1046,25 +1255,65 @@ export default function SimulatorView() {
               </div>
             </div>
 
-            {/* SECCIÓN 2: REVISIÓN DE LA HIPOTECA Y HISTORIAL DE EURÍBOR */}
+            {/* SECCIÓN 2: REVISIÓN DE LA HIPOTECA, ÍNDICE DE REFERENCIA Y HISTORIAL DE CUOTAS */}
             {formUnified.tipo_interes_modalidad === 'variable' && (
-              <div className="p-4 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 space-y-4">
-                <div className="flex items-center space-x-1.5">
-                  <RotateCw className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">
-                    2. Revisión de Hipoteca y Diferencial Bancario
-                  </h3>
+              <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 space-y-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <RotateCw className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">
+                      2. Revisión de Hipoteca, Índice & Diferencial Bancario
+                    </h3>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">
+                    {formUnified.indice_referencia || 'Euríbor 12M'}
+                  </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+                  {/* Selector de Índice de Referencia */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Índice de Referencia
+                    </label>
+                    <select
+                      value={
+                        ['Euríbor 12M', 'Euríbor 6M', 'Euríbor 3M', 'IRPH Entidades', 'Míbor'].includes(formUnified.indice_referencia)
+                          ? formUnified.indice_referencia
+                          : 'personalizado'
+                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFormUnified(prev => ({
+                          ...prev,
+                          indice_referencia: val === 'personalizado' ? (prev.indice_referencia || 'Personalizado') : val
+                        }));
+                      }}
+                      className="w-full px-3 py-2 text-xs sm:text-sm font-bold rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                    >
+                      {INDICES_REFERENCIA.map(ind => (
+                        <option key={ind.id} value={ind.id}>{ind.label}</option>
+                      ))}
+                    </select>
+                    {!['Euríbor 12M', 'Euríbor 6M', 'Euríbor 3M', 'IRPH Entidades', 'Míbor'].includes(formUnified.indice_referencia) && (
+                      <input
+                        type="text"
+                        placeholder="Nombre índice (ej: IRS 5A)..."
+                        value={formUnified.indice_referencia}
+                        onChange={(e) => setFormUnified(prev => ({ ...prev, indice_referencia: e.target.value }))}
+                        className="w-full mt-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200"
+                      />
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                       Mes de Revisión
                     </label>
                     <select
                       value={formUnified.mes_revision}
                       onChange={(e) => setFormUnified({ ...formUnified, mes_revision: e.target.value })}
-                      className="w-full px-3 py-2 text-xs sm:text-sm font-bold rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                      className="w-full px-3 py-2 text-xs sm:text-sm font-bold rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                     >
                       {MONTHS.map(m => (
                         <option key={m.value} value={m.label}>{m.label}</option>
@@ -1073,13 +1322,13 @@ export default function SimulatorView() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                       Frecuencia
                     </label>
                     <select
                       value={formUnified.frecuencia_revision}
                       onChange={(e) => setFormUnified({ ...formUnified, frecuencia_revision: e.target.value })}
-                      className="w-full px-3 py-2 text-xs sm:text-sm font-semibold rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                      className="w-full px-3 py-2 text-xs sm:text-sm font-semibold rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                     >
                       <option value="Anual">Anual (12 m)</option>
                       <option value="Semestral">Semestral (6 m)</option>
@@ -1088,7 +1337,7 @@ export default function SimulatorView() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                       Diferencial Base (%)
                     </label>
                     <input
@@ -1097,33 +1346,33 @@ export default function SimulatorView() {
                       placeholder="0.75"
                       value={formUnified.diferencial_euribor}
                       onChange={(e) => setFormUnified({ ...formUnified, diferencial_euribor: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 text-xs sm:text-sm font-bold rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-blue-600 dark:text-blue-400"
+                      className="w-full px-3 py-2 text-xs sm:text-sm font-black rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-blue-600 dark:text-blue-400"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                       Próxima Fecha
                     </label>
                     <input
                       type="date"
                       value={formUnified.proxima_revision_fecha}
                       onChange={(e) => setFormUnified({ ...formUnified, proxima_revision_fecha: e.target.value })}
-                      className="w-full px-3 py-2 text-xs sm:text-sm rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium"
+                      className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium"
                     />
                   </div>
                 </div>
 
-                {/* HISTORIAL ANUAL DE EURÍBOR DESDE EL INICIO */}
-                <div className="pt-2 border-t border-amber-200/60 dark:border-amber-800/60 space-y-3">
+                {/* HISTORIAL ANUAL DEL ÍNDICE CON CUOTA ESTIMADA Y REAL */}
+                <div className="pt-3 border-t border-amber-200/60 dark:border-amber-800/60 space-y-3">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center space-x-1.5">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center space-x-1.5">
                         <Database className="w-4 h-4 text-indigo-500" />
-                        <span>Historial del Euríbor de Cada Año (Editable)</span>
+                        <span>Historial de {formUnified.indice_referencia || 'Euríbor'} y Cuotas Resultantes (Editable)</span>
                       </h4>
                       <p className="text-[11px] text-slate-500">
-                        Serie de cada año desde el inicio. Pulsa para consultar los valores oficiales del Banco de España.
+                        Serie anual con la cuota mensual calculada según el índice, o la cuota real de tus recibos bancarios.
                       </p>
                     </div>
 
@@ -1132,16 +1381,16 @@ export default function SimulatorView() {
                         type="button"
                         onClick={handleConsultarEuriborOficial}
                         disabled={loadingEuribor}
-                        className="flex items-center space-x-1.5 px-3 py-1 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-sm transition-colors disabled:opacity-50"
+                        className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm transition-colors disabled:opacity-50"
                       >
                         {loadingEuribor ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                        <span>Auto-Cargar Euríbor Oficial</span>
+                        <span>Auto-Cargar {formUnified.indice_referencia?.split(' ')[0] || 'Índice'} Oficial</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={handleAddInterestYear}
-                        className="flex items-center space-x-1 px-2.5 py-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900 hover:bg-indigo-50 rounded-lg border border-indigo-200 dark:border-indigo-800 transition-colors"
+                        className="flex items-center space-x-1 px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900 hover:bg-indigo-50 rounded-xl border border-indigo-200 dark:border-indigo-800 transition-colors"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Añadir Año</span>
@@ -1149,11 +1398,12 @@ export default function SimulatorView() {
                     </div>
                   </div>
 
-                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                    {formUnified.historialIntereses.map((item, idx) => (
-                      <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+                  <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                    {historicalSchedule.map((item, idx) => (
+                      <div key={idx} className="flex flex-col lg:flex-row items-start lg:items-center space-y-2 lg:space-y-0 lg:space-x-2 bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors">
                         
-                        <div className="w-full sm:w-20">
+                        {/* Año */}
+                        <div className="w-full lg:w-20">
                           <label className="text-[10px] text-slate-400 block font-semibold">Año</label>
                           <input
                             type="number"
@@ -1163,19 +1413,23 @@ export default function SimulatorView() {
                           />
                         </div>
 
-                        <div className="w-full sm:w-24">
-                          <label className="text-[10px] text-slate-400 block font-semibold">Euríbor (%)</label>
+                        {/* Valor del Índice */}
+                        <div className="w-full lg:w-24">
+                          <label className="text-[10px] text-slate-400 block font-semibold truncate" title={formUnified.indice_referencia || 'Índice (%)'}>
+                            {formUnified.indice_referencia?.slice(0, 8) || 'Índice'} (%)
+                          </label>
                           <input
                             type="number"
                             step="0.01"
-                            value={item.euribor !== undefined ? item.euribor : ''}
+                            value={item.euribor !== undefined ? item.euribor : (item.indice !== undefined ? item.indice : '')}
                             onChange={(e) => handleUpdateInterestItem(idx, 'euribor', e.target.value)}
                             className="w-full px-2 py-1 text-xs font-bold rounded bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                           />
                         </div>
 
-                        <div className="w-full sm:w-24">
-                          <label className="text-[10px] text-slate-400 block font-semibold">Diferencial (%)</label>
+                        {/* Diferencial */}
+                        <div className="w-full lg:w-20">
+                          <label className="text-[10px] text-slate-400 block font-semibold">Dif. (%)</label>
                           <input
                             type="number"
                             step="0.01"
@@ -1185,7 +1439,8 @@ export default function SimulatorView() {
                           />
                         </div>
 
-                        <div className="w-full sm:w-28">
+                        {/* TIN Total */}
+                        <div className="w-full lg:w-24">
                           <label className="text-[10px] text-slate-400 block font-semibold">TIN Total (%)</label>
                           <input
                             type="number"
@@ -1196,21 +1451,73 @@ export default function SimulatorView() {
                           />
                         </div>
 
-                        <div className="w-full sm:flex-1">
+                        {/* CUOTA ESTIMADA / REAL (€/mes) */}
+                        <div className="w-full lg:w-36">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] text-slate-400 block font-semibold">
+                              Cuota (€/mes)
+                            </label>
+                            {item.tieneCuotaManual && (
+                              <button
+                                type="button"
+                                onClick={() => handleResetCuotaItem(idx)}
+                                className="text-[9px] text-amber-600 hover:text-amber-700 dark:text-amber-400 font-bold flex items-center"
+                                title="Restablecer a cuota estimada teórica"
+                              >
+                                ↺ Teórica
+                              </button>
+                            )}
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="0.01"
+                              placeholder={`${item.cuotaEstimada} €`}
+                              value={item.cuota !== undefined && item.cuota !== null ? item.cuota : ''}
+                              onChange={(e) => handleUpdateInterestItem(idx, 'cuota', e.target.value)}
+                              className={`w-full px-2 py-1 text-xs font-black rounded border ${
+                                item.tieneCuotaManual 
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300'
+                                  : 'bg-indigo-50/30 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400'
+                              }`}
+                            />
+                            {!item.tieneCuotaManual && (
+                              <span className="absolute right-2 top-1 text-[10px] font-black text-indigo-500 pointer-events-none">
+                                {formatCurrency(item.cuotaEstimada)}
+                              </span>
+                            )}
+                          </div>
+                          <span className={`text-[9px] block mt-0.5 font-medium ${item.tieneCuotaManual ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
+                            {item.tieneCuotaManual ? '✓ Cuota real manual' : `Est: ${formatCurrency(item.cuotaEstimada)}`}
+                          </span>
+                        </div>
+
+                        {/* Saldo Restante Tras Amortizar */}
+                        <div className="w-full lg:w-28 hidden xl:block">
+                          <label className="text-[10px] text-slate-400 block font-semibold">Saldo Fin Año</label>
+                          <div className="px-2 py-1 text-xs font-bold rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 truncate">
+                            {formatCurrency(item.capitalFin)}
+                          </div>
+                        </div>
+
+                        {/* Notas */}
+                        <div className="w-full lg:flex-1">
                           <label className="text-[10px] text-slate-400 block font-semibold">Notas</label>
                           <input
                             type="text"
-                            placeholder="Ej: Bonificación..."
+                            placeholder="Ej: Bonificación, revisión..."
                             value={item.notas || ''}
                             onChange={(e) => handleUpdateInterestItem(idx, 'notas', e.target.value)}
                             className="w-full px-2 py-1 text-xs rounded bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                           />
                         </div>
 
+                        {/* Eliminar Fila */}
                         <button
                           type="button"
                           onClick={() => handleRemoveInterestYear(idx)}
-                          className="p-1 text-slate-400 hover:text-rose-500 rounded sm:mt-3.5 self-end sm:self-auto"
+                          className="p-1 text-slate-400 hover:text-rose-500 rounded lg:mt-3.5 self-end lg:self-auto"
+                          title="Eliminar este año del historial"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -1695,13 +2002,13 @@ export default function SimulatorView() {
                     </button>
                   </div>
 
-                  {/* SERIE HISTÓRICA DEL EURÍBOR DESDE EL INICIO (SOLO SI TIENE INTERÉS VARIABLE) */}
+                  {/* SERIE HISTÓRICA DEL ÍNDICE DESDE EL INICIO (SOLO SI TIENE INTERÉS VARIABLE) */}
                   {!esSinInteres && historyList.length > 0 && (
                     <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center space-x-1.5 text-xs font-bold text-slate-700 dark:text-slate-200">
                           <History className="w-3.5 h-3.5 text-indigo-500" />
-                          <span>Evolución Euríbor ({startYear} - 2026):</span>
+                          <span>Evolución {p.indice_referencia || 'Euríbor'} ({startYear} - 2026):</span>
                         </div>
                         
                         <button
@@ -1715,22 +2022,32 @@ export default function SimulatorView() {
 
                       {/* Lista resumida o expandida */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {(isExpanded ? historyList : historyList.slice(-4)).map((h, hIdx) => (
-                          <div 
-                            key={hIdx}
-                            className="p-2 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-xs space-y-0.5"
-                          >
-                            <div className="flex justify-between items-center">
-                              <span className="font-bold text-indigo-950 dark:text-indigo-200">{h.ano}</span>
-                              <span className="font-black text-indigo-600 dark:text-indigo-400 text-sm">{h.interes}% TIN</span>
+                        {(isExpanded ? historyList : historyList.slice(-4)).map((h, hIdx) => {
+                          const valIndice = h.euribor !== undefined ? h.euribor : (h.indice !== undefined ? h.indice : '—');
+                          return (
+                            <div 
+                              key={hIdx}
+                              className="p-2 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-xs space-y-0.5"
+                            >
+                              <div className="flex justify-between items-center">
+                                <span className="font-bold text-indigo-950 dark:text-indigo-200">{h.ano}</span>
+                                <div className="text-right">
+                                  <span className="font-black text-indigo-600 dark:text-indigo-400 text-sm block">{h.interes}% TIN</span>
+                                  {h.cuota && (
+                                    <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400">
+                                      {formatCurrency(h.cuota)}/mes
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="text-[10px] text-slate-500 flex justify-between">
+                                <span>{p.indice_referencia?.slice(0, 7) || 'Índice'}: {valIndice !== '—' ? `${valIndice}%` : '—'}</span>
+                                <span className="font-semibold text-slate-700 dark:text-slate-300">Dif: +{h.diferencial !== undefined ? h.diferencial : (p.diferencial_euribor || 0.75)}%</span>
+                              </div>
+                              {h.notas && <p className="text-[10px] text-slate-400 italic pt-0.5">{h.notas}</p>}
                             </div>
-                            <div className="text-[10px] text-slate-500 flex justify-between">
-                              <span>Euríbor: {h.euribor !== undefined ? `${h.euribor}%` : '—'}</span>
-                              <span className="font-semibold text-slate-700 dark:text-slate-300">Dif: +{h.diferencial || p.diferencial_euribor || 0.75}%</span>
-                            </div>
-                            {h.notas && <p className="text-[10px] text-slate-400 italic pt-0.5">{h.notas}</p>}
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
