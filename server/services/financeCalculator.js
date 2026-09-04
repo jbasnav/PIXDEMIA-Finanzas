@@ -4,32 +4,34 @@ const db = require('../db');
  * Obtiene el resumen general y KPIs para el dashboard
  * Aplica la regla contable de CERO DOBLE CONTABILIZACIÓN de transferencias internas.
  */
-function getDashboardMetrics(year = 2026, month = null) {
+function getDashboardMetrics(year = 2026, month = null, usuarioId = 1) {
+  const finalUserId = Number(usuarioId) || 1;
+
   // 1. Saldos actuales por cuenta
   const cuentas = db.prepare(`
     SELECT id, nombre, tipo, saldo_inicial_2026, color_hex
     FROM cuentas
-    WHERE activo = 1
-  `).all();
+    WHERE activo = 1 AND usuario_id = ?
+  `).all(finalUserId);
 
   const saldosCuentas = cuentas.map(c => {
     const movDirectos = db.prepare(`
       SELECT COALESCE(SUM(importe), 0) as total
       FROM movimientos
-      WHERE cuenta_id = ? AND es_transferencia_interna = 0
-    `).get(c.id)?.total || 0;
+      WHERE cuenta_id = ? AND es_transferencia_interna = 0 AND usuario_id = ?
+    `).get(c.id, finalUserId)?.total || 0;
 
     const transfersSalida = db.prepare(`
       SELECT COALESCE(SUM(ABS(importe)), 0) as total
       FROM movimientos
-      WHERE cuenta_id = ? AND es_transferencia_interna = 1
-    `).get(c.id)?.total || 0;
+      WHERE cuenta_id = ? AND es_transferencia_interna = 1 AND usuario_id = ?
+    `).get(c.id, finalUserId)?.total || 0;
 
     const transfersEntrada = db.prepare(`
       SELECT COALESCE(SUM(ABS(importe)), 0) as total
       FROM movimientos
-      WHERE cuenta_destino_id = ? AND es_transferencia_interna = 1
-    `).get(c.id)?.total || 0;
+      WHERE cuenta_destino_id = ? AND es_transferencia_interna = 1 AND usuario_id = ?
+    `).get(c.id, finalUserId)?.total || 0;
 
     const saldoActual = c.saldo_inicial_2026 + movDirectos - transfersSalida + transfersEntrada;
 
@@ -50,16 +52,17 @@ function getDashboardMetrics(year = 2026, month = null) {
   const totalDeudaPendiente = db.prepare(`
     SELECT COALESCE(SUM(capital_pendiente), 0) as total
     FROM prestamos_y_pasivos
-  `).get()?.total || 0;
+    WHERE usuario_id = ?
+  `).get(finalUserId)?.total || 0;
 
   const patrimonioNeto = (saldoLiquido + totalInvertido) - totalDeudaPendiente;
 
-  let dateFilter = `strftime('%Y', fecha) = ?`;
-  let queryParams = [String(year)];
+  let dateFilter = `m.usuario_id = ? AND strftime('%Y', m.fecha) = ?`;
+  let queryParams = [finalUserId, String(year)];
 
   if (month) {
     const formattedMonth = String(month).padStart(2, '0');
-    dateFilter += ` AND strftime('%m', fecha) = ?`;
+    dateFilter += ` AND strftime('%m', m.fecha) = ?`;
     queryParams.push(formattedMonth);
   }
 
@@ -125,9 +128,9 @@ function getDashboardMetrics(year = 2026, month = null) {
       SELECT m.*, cat.tipo as cat_tipo
       FROM movimientos m
       JOIN categorias cat ON m.categoria_id = cat.id
-      WHERE strftime('%Y', m.fecha) = ? AND strftime('%m', m.fecha) = ?
+      WHERE m.usuario_id = ? AND strftime('%Y', m.fecha) = ? AND strftime('%m', m.fecha) = ?
       ORDER BY m.fecha ASC, m.id ASC
-    `).all(String(year), mStr);
+    `).all(finalUserId, String(year), mStr);
 
     let ingRealesMes = 0;
     let ingPrevistosMes = 0;

@@ -6,10 +6,11 @@ const { getDashboardMetrics } = require('../services/financeCalculator');
 // Dashboard KPIs y métricas principales
 router.get('/dashboard', (req, res) => {
   try {
+    const usuarioId = req.query.usuario_id || req.headers['x-usuario-id'] || 1;
     const year = parseInt(req.query.year) || 2026;
     const month = req.query.month ? parseInt(req.query.month) : null;
 
-    const metrics = getDashboardMetrics(year, month);
+    const metrics = getDashboardMetrics(year, month, usuarioId);
     res.json(metrics);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -19,6 +20,7 @@ router.get('/dashboard', (req, res) => {
 // Control de presupuestos y alertas de sobregasto por categoría
 router.get('/presupuestos', (req, res) => {
   try {
+    const usuarioId = req.query.usuario_id || req.headers['x-usuario-id'] || 1;
     const year = parseInt(req.query.year) || 2026;
     const month = req.query.month ? parseInt(req.query.month) : new Date().getMonth() + 1;
     const formattedMonth = String(month).padStart(2, '0');
@@ -33,8 +35,9 @@ router.get('/presupuestos', (req, res) => {
         COALESCE(p.limite_mensual, 0) as limite_mensual,
         COALESCE(SUM(ABS(m.importe)), 0) as gasto_real
       FROM categorias cat
-      LEFT JOIN presupuestos p ON p.categoria_id = cat.id AND p.ano = ? AND (p.mes = ? OR p.mes = 0)
+      LEFT JOIN presupuestos p ON p.categoria_id = cat.id AND p.ano = ? AND (p.mes = ? OR p.mes = 0) AND p.usuario_id = ?
       LEFT JOIN movimientos m ON m.categoria_id = cat.id 
+        AND m.usuario_id = ?
         AND strftime('%Y', m.fecha) = ?
         AND strftime('%m', m.fecha) = ?
         AND m.es_transferencia_interna = 0
@@ -44,7 +47,7 @@ router.get('/presupuestos', (req, res) => {
       ORDER BY gasto_real DESC
     `;
 
-    const items = db.prepare(query).all(year, month, String(year), formattedMonth);
+    const items = db.prepare(query).all(year, month, Number(usuarioId), Number(usuarioId), String(year), formattedMonth);
 
     const budgetsWithAlerts = items.map(item => {
       const limite = item.limite_mensual > 0 ? item.limite_mensual : 0;

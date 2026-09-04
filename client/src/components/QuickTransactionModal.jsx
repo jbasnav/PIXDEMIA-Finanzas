@@ -7,6 +7,8 @@ export default function QuickTransactionModal({ isOpen, onClose, onTransactionCr
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
   const [cuentaId, setCuentaId] = useState('');
   const [cuentaDestinoId, setCuentaDestinoId] = useState('');
+  const [cuentaImputadaId, setCuentaImputadaId] = useState('');
+  const [esConsolidado, setEsConsolidado] = useState(1);
   const [categoriaId, setCategoriaId] = useState('');
   const [subcategoria, setSubcategoria] = useState('');
   const [concepto, setConcepto] = useState('');
@@ -80,12 +82,14 @@ export default function QuickTransactionModal({ isOpen, onClose, onTransactionCr
       const payload = {
         fecha,
         cuenta_id: Number(cuentaId),
+        cuenta_imputada_id: cuentaImputadaId ? Number(cuentaImputadaId) : null,
         categoria_id: Number(categoriaId),
         subcategoria: subcategoria.trim(),
         concepto: concepto.trim() || (isTransfer ? 'Traspaso interno' : (subcategoria || 'Gasto')),
         importe: finalImporte,
         es_transferencia_interna: isTransfer,
         cuenta_destino_id: isTransfer ? Number(cuentaDestinoId) : null,
+        es_consolidado: Number(esConsolidado),
         etiqueta_especial: etiquetaEspecial.trim() || null,
         notas: notas.trim() || null
       };
@@ -96,6 +100,8 @@ export default function QuickTransactionModal({ isOpen, onClose, onTransactionCr
       setImporte('');
       setConcepto('');
       setSubcategoria('');
+      setCuentaImputadaId('');
+      setEsConsolidado(1);
       setEtiquetaEspecial('');
       setNotas('');
       
@@ -181,6 +187,48 @@ export default function QuickTransactionModal({ isOpen, onClose, onTransactionCr
             </button>
           </div>
 
+          {/* Estado de Consolidación (Real vs Simulación / Previsto) */}
+          <div className="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                Estado del Movimiento
+              </span>
+              <span className={`text-[11px] font-black px-2.5 py-0.5 rounded-full ${
+                esConsolidado === 1 
+                  ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' 
+                  : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
+              }`}>
+                {esConsolidado === 1 ? '✓ Consolidado (Real)' : '⏳ Previsto (Simulación)'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setEsConsolidado(1)}
+                className={`flex items-center justify-center space-x-1.5 py-1.5 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                  esConsolidado === 1
+                    ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm font-black'
+                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <span>✓ Consolidado (Real)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setEsConsolidado(0)}
+                className={`flex items-center justify-center space-x-1.5 py-1.5 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                  esConsolidado === 0
+                    ? 'bg-amber-500 text-white border-amber-600 shadow-sm font-black'
+                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <span>⏳ Previsto / Simulado</span>
+              </button>
+            </div>
+          </div>
+
           {/* Fecha e Importe */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -213,11 +261,11 @@ export default function QuickTransactionModal({ isOpen, onClose, onTransactionCr
             </div>
           </div>
 
-          {/* Cuentas (Origen y Destino) */}
+          {/* Cuentas (Origen y Destino / Imputación) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
-                {tipoMov === 'transferencia' ? 'Cuenta Origen (Sale)' : 'Cuenta'}
+                {tipoMov === 'transferencia' ? 'Cuenta Origen (Sale)' : 'Cuenta Pagadora / Origen'}
               </label>
               <select
                 required
@@ -233,7 +281,7 @@ export default function QuickTransactionModal({ isOpen, onClose, onTransactionCr
               </select>
             </div>
 
-            {tipoMov === 'transferencia' && (
+            {tipoMov === 'transferencia' ? (
               <div>
                 <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
                   Cuenta Destino (Entra)
@@ -252,9 +300,7 @@ export default function QuickTransactionModal({ isOpen, onClose, onTransactionCr
                   ))}
                 </select>
               </div>
-            )}
-
-            {tipoMov !== 'transferencia' && (
+            ) : (
               <div>
                 <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
                   Categoría
@@ -274,6 +320,28 @@ export default function QuickTransactionModal({ isOpen, onClose, onTransactionCr
               </div>
             )}
           </div>
+
+          {/* Banco / Cuenta de Imputación (Opcional, útil para tarjetas o imputación contable a otro banco) */}
+          {tipoMov !== 'transferencia' && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1 flex items-center justify-between">
+                <span>Banco / Cuenta de Imputación (Opcional)</span>
+                <span className="text-[10px] text-slate-400 font-normal">Si se debe asignar contablemente a otra entidad</span>
+              </label>
+              <select
+                value={cuentaImputadaId}
+                onChange={(e) => setCuentaImputadaId(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
+              >
+                <option value="">(Misma cuenta que el pago / Sin imputación especial)</option>
+                {cuentas.map(c => (
+                  <option key={c.id} value={c.id}>
+                    Imputar a: {c.nombre} ({c.entidad || c.tipo})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Tienda / Subcategoría con Autocompletado */}
           <div>

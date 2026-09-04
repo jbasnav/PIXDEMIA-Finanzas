@@ -22,6 +22,7 @@ app.use(async (req, res, next) => {
 });
 
 // Rutas API
+app.use('/api/usuarios', require('./routes/usuarios'));
 app.use('/api/cuentas', require('./routes/cuentas'));
 app.use('/api/categorias', require('./routes/categorias'));
 app.use('/api/movimientos', require('./routes/movimientos'));

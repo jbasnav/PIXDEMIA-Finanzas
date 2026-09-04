@@ -1,9 +1,20 @@
 -- Esquema Relacional de Base de Datos para Finanzas Personales & Tesorería Familiar
 
+CREATE TABLE IF NOT EXISTS usuarios_gestion (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre TEXT NOT NULL,
+    email_o_alias TEXT,
+    color_hex TEXT DEFAULT '#4f46e5',
+    icono TEXT DEFAULT 'Users',
+    es_defecto INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS cuentas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nombre TEXT NOT NULL UNIQUE,
-    tipo TEXT NOT NULL CHECK (tipo IN ('corriente', 'ahorro_emergencia', 'inversion', 'epsv')),
+    usuario_id INTEGER DEFAULT 1 REFERENCES usuarios_gestion(id) ON DELETE CASCADE,
+    nombre TEXT NOT NULL,
+    tipo TEXT NOT NULL CHECK (tipo IN ('corriente', 'ahorro_emergencia', 'inversion', 'epsv', 'tarjeta', 'prestamo')),
     saldo_inicial_2026 REAL DEFAULT 0.0,
     color_hex TEXT DEFAULT '#3b82f6',
     activo INTEGER DEFAULT 1,
@@ -29,8 +40,10 @@ CREATE TABLE IF NOT EXISTS subcategorias_o_tiendas (
 
 CREATE TABLE IF NOT EXISTS movimientos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    usuario_id INTEGER DEFAULT 1 REFERENCES usuarios_gestion(id) ON DELETE CASCADE,
     fecha TEXT NOT NULL, -- Formato ISO: YYYY-MM-DD
     cuenta_id INTEGER NOT NULL REFERENCES cuentas(id),
+    cuenta_imputada_id INTEGER REFERENCES cuentas(id), -- Cuenta/banco al que se asigna o imputa contablemente el gasto si difiere de cuenta_id
     categoria_id INTEGER NOT NULL REFERENCES categorias(id),
     subcategoria TEXT,
     concepto TEXT NOT NULL,

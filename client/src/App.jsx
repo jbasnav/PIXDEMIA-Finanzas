@@ -2,13 +2,15 @@ import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import QuickTransactionModal from './components/QuickTransactionModal';
 import ImportModal from './components/ImportModal';
+import UsersManagerModal from './components/UsersManagerModal';
+import AccountsManagerModal from './components/AccountsManagerModal';
 import DashboardView from './views/DashboardView';
 import TransactionsView from './views/TransactionsView';
 import ProjectsView from './views/ProjectsView';
 import SimulatorView from './views/SimulatorView';
 import BudgetsAndFoodView from './views/BudgetsAndFoodView';
 import AccountsView from './views/AccountsView';
-import { api } from './services/api';
+import { api, getGlobalUser, setGlobalUser } from './services/api';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
@@ -20,8 +22,11 @@ export default function App() {
 
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isUsersModalOpen, setIsUsersModalOpen] = useState(false);
+  const [isAccountsModalOpen, setIsAccountsModalOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
+  const [currentUser, setCurrentUser] = useState(null);
   const [cuentas, setCuentas] = useState([]);
   const [categorias, setCategorias] = useState([]);
 
@@ -36,13 +41,21 @@ export default function App() {
     }
   }, [darkMode]);
 
-  // Cargar catálogos globales
+  // Cargar usuario actual y catálogos globales
   const loadGlobalCatalogs = async () => {
     try {
-      const [cRes, catRes] = await Promise.all([
-        api.getCuentas(),
-        api.getCategorias()
+      const [usersList, cRes, catRes] = await Promise.all([
+        api.getUsuarios().catch(() => []),
+        api.getCuentas().catch(() => []),
+        api.getCategorias().catch(() => [])
       ]);
+
+      const activeId = getGlobalUser();
+      const current = usersList.find(u => u.id === activeId) || usersList[0] || null;
+      if (current && (!activeId || current.id !== activeId)) {
+        setGlobalUser(current.id);
+      }
+      setCurrentUser(current);
       setCuentas(cRes);
       setCategorias(catRes);
     } catch (err) {
@@ -58,6 +71,11 @@ export default function App() {
     setRefreshTrigger(prev => prev + 1);
   };
 
+  const handleUserSwitched = (user) => {
+    setCurrentUser(user);
+    handleDataChanged();
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
       
@@ -67,8 +85,11 @@ export default function App() {
         setCurrentTab={setCurrentTab}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
+        currentUser={currentUser}
         onOpenQuickAdd={() => setIsQuickAddOpen(true)}
         onOpenImport={() => setIsImportOpen(true)}
+        onOpenAccountsManager={() => setIsAccountsModalOpen(true)}
+        onOpenUsersManager={() => setIsUsersModalOpen(true)}
       />
 
       {/* Contenido Principal de la SPA */}
@@ -77,7 +98,8 @@ export default function App() {
           <DashboardView 
             key={`dash-${refreshTrigger}`}
             onOpenQuickAdd={() => setIsQuickAddOpen(true)} 
-            onOpenImport={() => setIsImportOpen(true)} 
+            onOpenImport={() => setIsImportOpen(true)}
+            onOpenAccountsManager={() => setIsAccountsModalOpen(true)}
           />
         )}
 
@@ -127,6 +149,20 @@ export default function App() {
         isOpen={isImportOpen}
         onClose={() => setIsImportOpen(false)}
         onImportSuccess={handleDataChanged}
+      />
+
+      {/* Modal de Gestión de Usuarios / Entornos de Gestión */}
+      <UsersManagerModal
+        isOpen={isUsersModalOpen}
+        onClose={() => setIsUsersModalOpen(false)}
+        onUserSwitched={handleUserSwitched}
+      />
+
+      {/* Modal de Gestión de Cuentas Bancarias y Calibración de Saldos */}
+      <AccountsManagerModal
+        isOpen={isAccountsModalOpen}
+        onClose={() => setIsAccountsModalOpen(false)}
+        onAccountsUpdated={handleDataChanged}
       />
 
       {/* Pie de Página */}

@@ -5,6 +5,7 @@ const db = require('../db');
 // Listar movimientos con filtros avanzados
 router.get('/', (req, res) => {
   try {
+    const usuarioId = req.query.usuario_id || req.headers['x-usuario-id'] || 1;
     const {
       cuenta_id,
       categoria_id,
@@ -23,12 +24,12 @@ router.get('/', (req, res) => {
       offset = 0
     } = req.query;
 
-    let whereClauses = ['1=1'];
-    let params = [];
+    let whereClauses = ['m.usuario_id = ?'];
+    let params = [usuarioId];
 
     if (cuenta_id) {
-      whereClauses.push('(m.cuenta_id = ? OR m.cuenta_destino_id = ?)');
-      params.push(cuenta_id, cuenta_id);
+      whereClauses.push('(m.cuenta_id = ? OR m.cuenta_destino_id = ? OR m.cuenta_imputada_id = ?)');
+      params.push(cuenta_id, cuenta_id, cuenta_id);
     }
 
     if (categoria_id) {
@@ -110,10 +111,14 @@ router.get('/', (req, res) => {
     const querySql = `
       SELECT 
         m.id,
+        m.usuario_id,
         m.fecha,
         m.cuenta_id,
         c.nombre as cuenta_nombre,
         c.color_hex as cuenta_color,
+        m.cuenta_imputada_id,
+        ci.nombre as cuenta_imputada_nombre,
+        ci.color_hex as cuenta_imputada_color,
         m.categoria_id,
         cat.nombre as categoria_nombre,
         cat.tipo as categoria_tipo,
@@ -134,6 +139,7 @@ router.get('/', (req, res) => {
       JOIN categorias cat ON m.categoria_id = cat.id
       JOIN cuentas c ON m.cuenta_id = c.id
       LEFT JOIN cuentas cd ON m.cuenta_destino_id = cd.id
+      LEFT JOIN cuentas ci ON m.cuenta_imputada_id = ci.id
       WHERE ${whereSql}
       ORDER BY ${sortCol} ${orderDir}, m.id ${orderDir}
       LIMIT ? OFFSET ?
@@ -203,15 +209,18 @@ router.get('/', (req, res) => {
 // Crear movimiento
 router.post('/', (req, res) => {
   try {
+    const usuarioId = req.body.usuario_id || req.headers['x-usuario-id'] || 1;
     const {
       fecha,
       cuenta_id,
+      cuenta_imputada_id = null,
       categoria_id,
       subcategoria = '',
       concepto,
       importe,
       es_transferencia_interna = 0,
       cuenta_destino_id = null,
+      es_consolidado = 1,
       etiqueta_especial = null,
       notas = ''
     } = req.body;
@@ -238,20 +247,23 @@ router.post('/', (req, res) => {
 
     const stmt = db.prepare(`
       INSERT INTO movimientos (
-        fecha, cuenta_id, categoria_id, subcategoria, concepto, importe,
-        es_transferencia_interna, cuenta_destino_id, etiqueta_especial, notas, origen_importacion
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Manual')
+        usuario_id, fecha, cuenta_id, cuenta_imputada_id, categoria_id, subcategoria, concepto, importe,
+        es_transferencia_interna, cuenta_destino_id, es_consolidado, etiqueta_especial, notas, origen_importacion
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Manual')
     `);
 
     const info = stmt.run(
+      Number(usuarioId),
       fecha,
       Number(cuenta_id),
+      cuenta_imputada_id ? Number(cuenta_imputada_id) : null,
       Number(categoria_id),
       subcategoria,
       concepto,
       finalImporte,
       finalEsTransferencia,
       finalCuentaDestino ? Number(finalCuentaDestino) : null,
+      es_consolidado !== undefined ? Number(es_consolidado) : 1,
       etiqueta_especial || null,
       notas || ''
     );
@@ -271,11 +283,13 @@ router.post('/', (req, res) => {
         m.*, 
         c.nombre as cuenta_nombre, 
         cat.nombre as categoria_nombre,
-        cd.nombre as cuenta_destino_nombre
+        cd.nombre as cuenta_destino_nombre,
+        ci.nombre as cuenta_imputada_nombre
       FROM movimientos m
       JOIN categorias cat ON m.categoria_id = cat.id
       JOIN cuentas c ON m.cuenta_id = c.id
       LEFT JOIN cuentas cd ON m.cuenta_destino_id = cd.id
+      LEFT JOIN cuentas ci ON m.cuenta_imputada_id = ci.id
       WHERE m.id = ?
     `).get(info.lastInsertRowid);
 
@@ -291,6 +305,7 @@ router.put('/:id', (req, res) => {
     const {
       fecha,
       cuenta_id,
+      cuenta_imputada_id,
       categoria_id,
       subcategoria,
       concepto,
@@ -306,6 +321,7 @@ router.put('/:id', (req, res) => {
       UPDATE movimientos
       SET fecha = COALESCE(?, fecha),
           cuenta_id = COALESCE(?, cuenta_id),
+          cuenta_imputada_id = ?,
           categoria_id = COALESCE(?, categoria_id),
           subcategoria = COALESCE(?, subcategoria),
           concepto = COALESCE(?, concepto),
@@ -321,6 +337,7 @@ router.put('/:id', (req, res) => {
     stmt.run(
       fecha,
       cuenta_id,
+      cuenta_imputada_id !== undefined ? (cuenta_imputada_id ? Number(cuenta_imputada_id) : null) : null,
       categoria_id,
       subcategoria,
       concepto,
@@ -341,11 +358,13 @@ router.put('/:id', (req, res) => {
         cat.nombre as categoria_nombre,
         cat.color as categoria_color,
         cat.tipo as categoria_tipo,
-        cd.nombre as cuenta_destino_nombre
+        cd.nombre as cuenta_destino_nombre,
+        ci.nombre as cuenta_imputada_nombre
       FROM movimientos m
       JOIN categorias cat ON m.categoria_id = cat.id
       JOIN cuentas c ON m.cuenta_id = c.id
       LEFT JOIN cuentas cd ON m.cuenta_destino_id = cd.id
+      LEFT JOIN cuentas ci ON m.cuenta_imputada_id = ci.id
       WHERE m.id = ?
     `).get(req.params.id);
 

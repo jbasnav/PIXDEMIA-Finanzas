@@ -54,7 +54,7 @@ const MONTH_NAMES_FULL = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ];
 
-export default function DashboardView({ onOpenQuickAdd, onOpenImport }) {
+export default function DashboardView({ onOpenQuickAdd, onOpenImport, onOpenAccountsManager }) {
   const [year, setYear] = useState(2026);
   const [month, setMonth] = useState(''); // '' = todo el año para los KPIs superiores
   const [data, setData] = useState(null);
@@ -936,7 +936,7 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport }) {
 
       {/* Desglose de Cuentas y Saldos Actuales */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
           <div>
             <h3 className="font-bold text-base text-slate-900 dark:text-white">
               Posición Global por Entidad Bancaria
@@ -945,6 +945,15 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport }) {
               Saldos en tiempo real conciliados con transferencias y recibos
             </p>
           </div>
+          {onOpenAccountsManager && (
+            <button
+              onClick={onOpenAccountsManager}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 transition-colors w-fit"
+            >
+              <Landmark className="w-3.5 h-3.5" />
+              <span>Gestionar Cuentas / Calibrar Saldos</span>
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">

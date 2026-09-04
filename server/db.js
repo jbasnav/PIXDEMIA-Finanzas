@@ -157,7 +157,7 @@ function initSchemaAndSeeds() {
   const schemaSql = fs.readFileSync(schemaPath, 'utf8');
   rawDb.exec(schemaSql);
 
-  // Migraciones automáticas de columnas adicionales para prestamos_y_pasivos y suscripciones
+  // Migraciones automáticas de columnas adicionales para usuarios, prestamos, suscripciones y movimientos
   const alterColumns = [
     'ALTER TABLE prestamos_y_pasivos ADD COLUMN tipo_interes_modalidad TEXT DEFAULT "variable"',
     'ALTER TABLE prestamos_y_pasivos ADD COLUMN diferencial_euribor REAL DEFAULT 0.0',
@@ -167,15 +167,35 @@ function initSchemaAndSeeds() {
     'ALTER TABLE prestamos_y_pasivos ADD COLUMN frecuencia_revision TEXT DEFAULT "Anual"',
     'ALTER TABLE prestamos_y_pasivos ADD COLUMN proxima_revision_fecha TEXT',
     'ALTER TABLE suscripciones_servicios ADD COLUMN logo_url TEXT',
-    'ALTER TABLE movimientos ADD COLUMN es_consolidado INTEGER DEFAULT 1'
+    'ALTER TABLE movimientos ADD COLUMN es_consolidado INTEGER DEFAULT 1',
+    'ALTER TABLE movimientos ADD COLUMN cuenta_imputada_id INTEGER',
+    'ALTER TABLE movimientos ADD COLUMN usuario_id INTEGER DEFAULT 1',
+    'ALTER TABLE cuentas ADD COLUMN usuario_id INTEGER DEFAULT 1',
+    'ALTER TABLE presupuestos ADD COLUMN usuario_id INTEGER DEFAULT 1',
+    'ALTER TABLE suscripciones_servicios ADD COLUMN usuario_id INTEGER DEFAULT 1',
+    'ALTER TABLE prestamos_y_pasivos ADD COLUMN usuario_id INTEGER DEFAULT 1'
   ];
 
   for (const alterSql of alterColumns) {
     try {
       rawDb.exec(alterSql);
     } catch (e) {
-      // Ya existe la columna
+      // Ya existe la columna o tabla
     }
+  }
+
+  // Semilla de Usuario por defecto
+  try {
+    const userCountRes = rawDb.exec('SELECT COUNT(*) as count FROM usuarios_gestion');
+    const userCount = userCountRes[0]?.values[0][0] || 0;
+    if (userCount === 0) {
+      rawDb.run(
+        'INSERT INTO usuarios_gestion (id, nombre, email_o_alias, color_hex, icono, es_defecto) VALUES (1, ?, ?, ?, ?, 1)',
+        ['Tesorería Familiar', 'familia@pixdemia.com', '#4f46e5', 'Users']
+      );
+    }
+  } catch (e) {
+    // Si la tabla no existe o error
   }
 
   // Actualizar logos por defecto si no existen
@@ -198,18 +218,18 @@ function initSchemaAndSeeds() {
 
   if (cuentasCount === 0) {
     const defaultCuentas = [
-      { nombre: 'Santander', tipo: 'corriente', saldo_inicial_2026: 4500.00, color_hex: '#ec0000' },
-      { nombre: 'Kutxa', tipo: 'corriente', saldo_inicial_2026: 2150.00, color_hex: '#008080' },
-      { nombre: 'N26', tipo: 'ahorro_emergencia', saldo_inicial_2026: 8500.00, color_hex: '#36a18b' },
-      { nombre: 'Indexa Capital', tipo: 'inversion', saldo_inicial_2026: 24000.00, color_hex: '#1e293b' },
-      { nombre: 'EPSV Julio', tipo: 'epsv', saldo_inicial_2026: 38500.00, color_hex: '#6366f1' },
-      { nombre: 'EPSV Yolanda', tipo: 'epsv', saldo_inicial_2026: 31200.00, color_hex: '#ec4899' }
+      { nombre: 'Santander', tipo: 'corriente', saldo_inicial_2026: 4500.00, color_hex: '#ec0000', usuario_id: 1 },
+      { nombre: 'Kutxa', tipo: 'corriente', saldo_inicial_2026: 2150.00, color_hex: '#008080', usuario_id: 1 },
+      { nombre: 'N26', tipo: 'ahorro_emergencia', saldo_inicial_2026: 8500.00, color_hex: '#36a18b', usuario_id: 1 },
+      { nombre: 'Indexa Capital', tipo: 'inversion', saldo_inicial_2026: 24000.00, color_hex: '#1e293b', usuario_id: 1 },
+      { nombre: 'EPSV Julio', tipo: 'epsv', saldo_inicial_2026: 38500.00, color_hex: '#6366f1', usuario_id: 1 },
+      { nombre: 'EPSV Yolanda', tipo: 'epsv', saldo_inicial_2026: 31200.00, color_hex: '#ec4899', usuario_id: 1 }
     ];
 
     for (const c of defaultCuentas) {
       rawDb.run(
-        'INSERT INTO cuentas (nombre, tipo, saldo_inicial_2026, color_hex, activo) VALUES (?, ?, ?, ?, 1)',
-        [c.nombre, c.tipo, c.saldo_inicial_2026, c.color_hex]
+        'INSERT INTO cuentas (nombre, tipo, saldo_inicial_2026, color_hex, activo, usuario_id) VALUES (?, ?, ?, ?, 1, ?)',
+        [c.nombre, c.tipo, c.saldo_inicial_2026, c.color_hex, c.usuario_id || 1]
       );
     }
   }

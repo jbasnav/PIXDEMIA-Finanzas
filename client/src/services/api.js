@@ -1,19 +1,83 @@
 const API_BASE = '/api';
 
+let activeUserId = localStorage.getItem('pixdemia_usuario_id') || 1;
+
+export const setGlobalUser = (id) => {
+  activeUserId = id;
+  localStorage.setItem('pixdemia_usuario_id', id);
+};
+
+export const getGlobalUser = () => activeUserId;
+
+const getHeaders = (extra = {}) => ({
+  'Content-Type': 'application/json',
+  'x-usuario-id': String(activeUserId),
+  ...extra
+});
+
 export const api = {
+  // Usuarios & Espacios de Gestión
+  async getUsuarios() {
+    const res = await fetch(`${API_BASE}/usuarios`);
+    if (!res.ok) throw new Error('Error al cargar usuarios');
+    return res.json();
+  },
+
+  async createUsuario(data) {
+    const res = await fetch(`${API_BASE}/usuarios`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al crear usuario');
+    }
+    return res.json();
+  },
+
+  async updateUsuario(id, data) {
+    const res = await fetch(`${API_BASE}/usuarios/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al actualizar usuario');
+    }
+    return res.json();
+  },
+
+  async deleteUsuario(id) {
+    const res = await fetch(`${API_BASE}/usuarios/${id}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al eliminar usuario');
+    }
+    return res.json();
+  },
+
   // Analytics & Dashboard
   async getDashboard(year = 2026, month = null) {
-    const params = new URLSearchParams({ year });
+    const params = new URLSearchParams({ year, usuario_id: activeUserId });
     if (month) params.append('month', month);
-    const res = await fetch(`${API_BASE}/analytics/dashboard?${params}`);
+    const res = await fetch(`${API_BASE}/analytics/dashboard?${params}`, {
+      headers: getHeaders()
+    });
     if (!res.ok) throw new Error('Error al cargar dashboard');
     return res.json();
   },
 
   async getPresupuestos(year = 2026, month = null) {
-    const params = new URLSearchParams({ year });
+    const params = new URLSearchParams({ year, usuario_id: activeUserId });
     if (month) params.append('month', month);
-    const res = await fetch(`${API_BASE}/analytics/presupuestos?${params}`);
+    const res = await fetch(`${API_BASE}/analytics/presupuestos?${params}`, {
+      headers: getHeaders()
+    });
     if (!res.ok) throw new Error('Error al cargar presupuestos');
     return res.json();
   },
@@ -21,8 +85,8 @@ export const api = {
   async savePresupuesto(data) {
     const res = await fetch(`${API_BASE}/analytics/presupuestos`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      headers: getHeaders(),
+      body: JSON.stringify({ ...data, usuario_id: activeUserId })
     });
     if (!res.ok) throw new Error('Error al guardar presupuesto');
     return res.json();
@@ -30,7 +94,9 @@ export const api = {
 
   // Cuentas
   async getCuentas() {
-    const res = await fetch(`${API_BASE}/cuentas`);
+    const res = await fetch(`${API_BASE}/cuentas?usuario_id=${activeUserId}`, {
+      headers: getHeaders()
+    });
     if (!res.ok) throw new Error('Error al cargar cuentas');
     return res.json();
   },
@@ -38,20 +104,38 @@ export const api = {
   async createCuenta(data) {
     const res = await fetch(`${API_BASE}/cuentas`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      headers: getHeaders(),
+      body: JSON.stringify({ ...data, usuario_id: activeUserId })
     });
-    if (!res.ok) throw new Error('Error al crear cuenta');
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al crear cuenta');
+    }
     return res.json();
   },
 
   async updateCuenta(id, data) {
     const res = await fetch(`${API_BASE}/cuentas/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(),
       body: JSON.stringify(data)
     });
-    if (!res.ok) throw new Error('Error al actualizar cuenta');
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al actualizar cuenta');
+    }
+    return res.json();
+  },
+
+  async deleteCuenta(id, force = false) {
+    const res = await fetch(`${API_BASE}/cuentas/${id}?force=${force ? 'true' : 'false'}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al eliminar cuenta');
+    }
     return res.json();
   },
 
