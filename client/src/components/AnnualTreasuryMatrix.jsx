@@ -129,37 +129,87 @@ export default function AnnualTreasuryMatrix({ matrizData, onSelectMonth, select
         </div>
       </div>
 
-      {/* Tarjetas de Resumen Evolución: Apertura vs Cierre */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {/* Tarjetas de Resumen Apertura vs Cierre */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
         {/* Saldo Inicial */}
-        <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 flex flex-col justify-between shadow-xs">
+        <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 flex flex-col justify-between shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <span className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">
               Saldo Apertura (1 Ene {year})
             </span>
-            <Wallet className="w-4 h-4 text-slate-400" />
+            <Wallet className="w-3.5 h-3.5 text-slate-400" />
           </div>
-          <p className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-1.5 whitespace-nowrap">
+          <p className="text-sm sm:text-base xl:text-base 2xl:text-lg font-black text-slate-900 dark:text-white mt-1 whitespace-nowrap">
             {formatCurrency(resumenAno.saldoInicialLiquido)}
           </p>
-          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 truncate" title={cuentasLiquid.map(c => `${c.nombre}: ${fmt(c.saldoInicial2026)}`).join(' | ')}>
+          <p className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 truncate" title={cuentasLiquid.map(c => `${c.nombre}: ${fmt(c.saldoInicial2026)}`).join(' | ')}>
             {cuentasLiquid.map(c => `${c.nombre}: ${fmt(c.saldoInicial2026)}`).join(' | ')}
           </p>
         </div>
 
-        {/* Saldo Cierre Proyectado */}
-        <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-900 to-indigo-950 text-white border border-slate-700 shadow-md flex flex-col justify-between">
+        {/* Ingresos Totales (Reales + Previstos) */}
+        <div className="p-3 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 flex flex-col justify-between shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-indigo-200">
-              Saldo Cierre Proyectado (31 Dic {year})
+            <span className="text-[10px] font-bold uppercase text-emerald-800 dark:text-emerald-300">
+              Total Ingresos {year}
             </span>
-            <Landmark className="w-4 h-4 text-indigo-300" />
+            <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
           </div>
-          <p className="text-lg sm:text-xl font-black text-emerald-400 mt-1.5 whitespace-nowrap">
+          <p className="text-sm sm:text-base xl:text-base 2xl:text-lg font-black text-emerald-600 dark:text-emerald-400 mt-1 whitespace-nowrap">
+            +{formatCurrency(resumenAno.totalIngresosAno)}
+          </p>
+          <div className="flex items-center justify-between text-[9px] text-emerald-700 dark:text-emerald-300 mt-1 truncate">
+            <span>Reales: {Math.round(resumenAno.totalIngresosRealesAno || 0).toLocaleString()}€</span>
+            <span>Prev: {Math.round(resumenAno.totalIngresosPrevistosAno || 0).toLocaleString()}€</span>
+          </div>
+        </div>
+
+        {/* Gastos Totales (Reales + Previstos) */}
+        <div className="p-3 rounded-2xl bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase text-rose-800 dark:text-rose-300">
+              Total Gastos Anuales
+            </span>
+            <TrendingDown className="w-3.5 h-3.5 text-rose-600" />
+          </div>
+          <p className="text-sm sm:text-base xl:text-base 2xl:text-lg font-black text-rose-600 dark:text-rose-400 mt-1 whitespace-nowrap">
+            -{formatCurrency(resumenAno.totalGastosAno)}
+          </p>
+          <div className="flex items-center justify-between text-[9px] text-rose-700 dark:text-rose-300 mt-1 truncate">
+            <span>Reales: {Math.round(resumenAno.totalGastosRealesAno || 0).toLocaleString()}€</span>
+            <span>Prev: {Math.round(resumenAno.totalGastosPrevistosAno || 0).toLocaleString()}€</span>
+          </div>
+        </div>
+
+        {/* Ahorro Neto Previsto */}
+        <div className="p-3 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/40 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase text-indigo-800 dark:text-indigo-300">
+              Ahorro Neto Anual
+            </span>
+            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+          </div>
+          <p className={`text-sm sm:text-base xl:text-base 2xl:text-lg font-black mt-1 whitespace-nowrap ${resumenAno.ahorroNetoProyectado >= 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-rose-600'}`}>
+            {formatCurrency(resumenAno.ahorroNetoProyectado)}
+          </p>
+          <p className="text-[9px] text-indigo-700 dark:text-indigo-300 mt-1 truncate">
+            + {Math.round(resumenAno.totalInvertidoAno || 0).toLocaleString()}€ en Fondos/EPSV
+          </p>
+        </div>
+
+        {/* Saldo Cierre Proyectado */}
+        <div className="p-3 rounded-2xl bg-gradient-to-br from-slate-900 to-indigo-950 text-white border border-slate-700 shadow-md col-span-2 sm:col-span-1 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-extrabold uppercase text-indigo-200">
+              Saldo Cierre (31 Dic {year})
+            </span>
+            <Landmark className="w-3.5 h-3.5 text-indigo-300" />
+          </div>
+          <p className="text-sm sm:text-base xl:text-base 2xl:text-lg font-black text-emerald-400 mt-1 whitespace-nowrap">
             {formatCurrency(resumenAno.saldoFinalProyectadoLiquido)}
           </p>
-          <p className="text-[10px] text-slate-300 mt-1 truncate">
-            Recálculo automático considerando movimientos reales y previsiones pendientes
+          <p className="text-[9px] text-slate-300 mt-1 truncate">
+            Recálculo con previsiones
           </p>
         </div>
       </div>

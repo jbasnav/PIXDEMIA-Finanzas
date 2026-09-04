@@ -403,185 +403,12 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport, onOpenAcco
         selectedMonth={selectedMonthDetail}
       />
 
-      {/* Gráficos Principales: Evolución Mensual + Donut de Gastos */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Gráfico de Barras y Líneas Interactivo: Ingresos vs Gastos + Línea de Saldo */}
-        <div className="lg:col-span-2 min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center space-x-2">
-                <span>Evolución Financiera y Saldo {year}</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 flex items-center space-x-1">
-                  <MousePointerClick className="w-3 h-3" />
-                  <span>Haz clic en una barra para inspeccionar o deseleccionar</span>
-                </span>
-              </h3>
-              <p className="text-xs text-slate-500">
-                Barras: Ingresos vs Gastos mensuales | Línea azul/morada: Evolución del saldo líquido (Real vs Simulado)
-              </p>
-            </div>
-          </div>
-
-          <div className="h-72 w-full min-w-0">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
-              <ComposedChart 
-                data={evolucionMensual} 
-                margin={{ top: 12, right: 15, left: 15, bottom: 0 }}
-                onClick={(e) => {
-                  if (e && e.activePayload && e.activePayload.length > 0) {
-                    const payload = e.activePayload[0].payload;
-                    if (payload && payload.numMes) {
-                      setSelectedMonthDetail(prev => prev === payload.numMes ? null : payload.numMes);
-                    }
-                  }
-                }}
-                className="cursor-pointer"
-              >
-                <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                <XAxis dataKey="mes" tick={{ fontSize: 12 }} />
-                <YAxis width={75} tick={{ fontSize: 11 }} tickFormatter={(val) => `${Math.round(val).toLocaleString('es-ES')} €`} />
-                <Tooltip 
-                  formatter={(value, name) => [formatCurrency(value), name]}
-                  contentStyle={{ 
-                    backgroundColor: 'rgba(15, 23, 42, 0.9)', 
-                    border: 'none', 
-                    borderRadius: '12px',
-                    color: '#fff',
-                    fontSize: '12px'
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                <Bar dataKey="ingresos" name="Ingresos Netos" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                <Bar dataKey="gastos" name="Gastos Consumo" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                <Bar dataKey="inversion" name="Asignación Inversión" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                <Line 
-                  type="monotone" 
-                  dataKey="saldoReal" 
-                  name="Saldo Real Líquido" 
-                  stroke="#2563eb" 
-                  strokeWidth={3} 
-                  dot={{ r: 3.5, fill: '#2563eb', strokeWidth: 1.5, stroke: '#fff' }} 
-                  activeDot={{ r: 5.5 }} 
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="saldoSimulado" 
-                  name="Saldo Previsto / Simulación" 
-                  stroke="#a855f7" 
-                  strokeWidth={3} 
-                  strokeDasharray="5 5" 
-                  dot={{ r: 3.5, fill: '#a855f7', strokeWidth: 1.5, stroke: '#fff' }} 
-                  activeDot={{ r: 5.5 }} 
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Gráfico Donut: Distribución de Gastos */}
-        <div className="min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm flex flex-col justify-between">
-          <div>
-            <h3 className="font-bold text-base text-slate-900 dark:text-white">
-              Distribución por Categorías
-            </h3>
-            <p className="text-xs text-slate-500">
-              Desglose de consumo corriente del periodo seleccionado
-            </p>
-          </div>
-
-          {distribucionCategorias.length > 0 ? (
-            <div className="h-56 w-full min-w-0 my-2">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
-                <PieChart>
-                  <Pie
-                    data={distribucionCategorias}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={3}
-                    dataKey="total"
-                    nameKey="nombre"
-                    className="cursor-pointer"
-                    onClick={(entry) => {
-                      if (entry && (entry.nombre || entry.name)) {
-                        handleCategoryClick(entry.nombre || entry.name);
-                      }
-                    }}
-                  >
-                    {distribucionCategorias.map((entry, index) => {
-                      const isCatSelected = categoryFilter === entry.nombre;
-                      return (
-                        <Cell 
-                          key={`cell-${index}`} 
-                          fill={entry.color || COLORS[index % COLORS.length]} 
-                          stroke={isCatSelected ? '#4f46e5' : '#fff'}
-                          strokeWidth={isCatSelected ? 3 : 1}
-                        />
-                      );
-                    })}
-                  </Pie>
-                  <Tooltip 
-                    formatter={(val) => [formatCurrency(val), 'Gasto']}
-                    contentStyle={{ 
-                      backgroundColor: 'rgba(15, 23, 42, 0.9)', 
-                      border: 'none', 
-                      borderRadius: '12px',
-                      color: '#fff',
-                      fontSize: '12px'
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-56 text-slate-400 text-xs">
-              <AlertCircle className="w-8 h-8 mb-2 opacity-50" />
-              <span>Sin gastos registrados para este periodo</span>
-            </div>
-          )}
-
-          {/* Lista de Categorías con Clic para Filtrar */}
-          <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-            {distribucionCategorias.map((cat, idx) => {
-              const isCatSelected = categoryFilter === cat.nombre;
-              return (
-                <div 
-                  key={cat.id} 
-                  onClick={() => handleCategoryClick(cat.nombre)}
-                  className={`flex items-center justify-between text-xs p-1.5 rounded-xl cursor-pointer transition-all ${
-                    isCatSelected 
-                      ? 'bg-indigo-100 dark:bg-indigo-950/80 ring-2 ring-indigo-500 font-bold shadow-xs' 
-                      : 'hover:bg-slate-100 dark:hover:bg-slate-800/60'
-                  }`}
-                  title={`Haz clic para ver movimientos de ${cat.nombre}`}
-                >
-                  <div className="flex items-center space-x-2 truncate">
-                    <div 
-                      className="w-2.5 h-2.5 rounded-full flex-shrink-0" 
-                      style={{ backgroundColor: cat.color || COLORS[idx % COLORS.length] }} 
-                    />
-                    <span className={`truncate ${isCatSelected ? 'text-indigo-900 dark:text-indigo-200 font-black' : 'text-slate-700 dark:text-slate-300'}`}>
-                      {cat.nombre}
-                    </span>
-                  </div>
-                  <span className={`ml-2 whitespace-nowrap ${isCatSelected ? 'text-indigo-700 dark:text-indigo-300 font-black' : 'font-bold text-slate-900 dark:text-white'}`}>
-                    {formatCurrency(cat.total)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
       {/* ========================================================================= */}
-      {/* SECCIÓN DETALLE MENSUAL: TABLA DE GASTOS E INGRESOS DEL MES CLICADO */}
+      {/* 3. SECCIÓN DETALLE MENSUAL: TABLA DE GASTOS E INGRESOS DEL MES CLICADO */}
       {/* ========================================================================= */}
       <div id="detalle-movimientos-section" className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-5 animate-fadeIn">
         
-        {/* Cabecera del Mes Seleccionado */}
+        {/* Cabecera del Mes Seleccionado (Limpia sin KPIs redundantes) */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -624,33 +451,9 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport, onOpenAcco
             </h2>
             <p className="text-xs text-slate-500">
               {selectedMonthDetail 
-                ? `Visualizando los movimientos de ${MONTH_NAMES_FULL[selectedMonthDetail - 1]}. Puedes hacer clic de nuevo en la barra o en "Deseleccionar Mes" para ver todo el año.` 
+                ? `Visualizando los movimientos de ${MONTH_NAMES_FULL[selectedMonthDetail - 1]}. Puedes hacer clic de nuevo en el mes o en "Deseleccionar Mes" para ver todo el año.` 
                 : `Visualizando todos los movimientos registrados en el ejercicio fiscal ${year}.`}
             </p>
-          </div>
-
-          {/* Tarjetitas de Resumen del Mes Clicado */}
-          <div className="flex flex-wrap gap-2.5">
-            <div className="px-3.5 py-2 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60">
-              <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase block">Ingresos</span>
-              <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
-                +{formatCurrency(currentMonthData.ingresos)}
-              </span>
-            </div>
-
-            <div className="px-3.5 py-2 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60">
-              <span className="text-[10px] font-bold text-rose-800 dark:text-rose-300 uppercase block">Gastos</span>
-              <span className="text-sm font-black text-rose-600 dark:text-rose-400">
-                -{formatCurrency(currentMonthData.gastos)}
-              </span>
-            </div>
-
-            <div className="px-3.5 py-2 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60">
-              <span className="text-[10px] font-bold text-indigo-800 dark:text-indigo-300 uppercase block">Ahorro Neto</span>
-              <span className={`text-sm font-black ${currentMonthData.ahorro >= 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-rose-600'}`}>
-                {formatCurrency(currentMonthData.ahorro)}
-              </span>
-            </div>
           </div>
         </div>
 
@@ -964,6 +767,183 @@ export default function DashboardView({ onOpenQuickAdd, onOpenImport, onOpenAcco
               No se han encontrado movimientos para el mes de {MONTH_NAMES_FULL[selectedMonthDetail - 1]} con los filtros seleccionados.
             </div>
           )}
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 4. GRÁFICOS: EVOLUCIÓN FINANCIERA MENSUAL Y DISTRIBUCIÓN DE GASTOS */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Gráfico de Barras y Líneas Interactivo: Ingresos vs Gastos + Línea de Saldo */}
+        <div className="lg:col-span-2 min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center space-x-2">
+                <span>Evolución Financiera y Saldo {year}</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 flex items-center space-x-1">
+                  <MousePointerClick className="w-3 h-3" />
+                  <span>Haz clic en una barra para inspeccionar o deseleccionar</span>
+                </span>
+              </h3>
+              <p className="text-xs text-slate-500">
+                Barras: Ingresos vs Gastos mensuales | Línea azul/morada: Evolución del saldo líquido (Real vs Simulado)
+              </p>
+            </div>
+          </div>
+
+          <div className="h-72 w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
+              <ComposedChart 
+                data={evolucionMensual} 
+                margin={{ top: 12, right: 15, left: 15, bottom: 0 }}
+                onClick={(e) => {
+                  if (e && e.activePayload && e.activePayload.length > 0) {
+                    const payload = e.activePayload[0].payload;
+                    if (payload && payload.numMes) {
+                      setSelectedMonthDetail(prev => prev === payload.numMes ? null : payload.numMes);
+                      const el = document.getElementById('detalle-movimientos-section');
+                      if (el) el.scrollIntoView({ behavior: 'smooth' });
+                    }
+                  }
+                }}
+                className="cursor-pointer"
+              >
+                <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                <XAxis dataKey="mes" tick={{ fontSize: 12 }} />
+                <YAxis width={75} tick={{ fontSize: 11 }} tickFormatter={(val) => `${Math.round(val).toLocaleString('es-ES')} €`} />
+                <Tooltip 
+                  formatter={(value, name) => [formatCurrency(value), name]}
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(15, 23, 42, 0.9)', 
+                    border: 'none', 
+                    borderRadius: '12px',
+                    color: '#fff',
+                    fontSize: '12px'
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                <Bar dataKey="ingresos" name="Ingresos Netos" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                <Bar dataKey="gastos" name="Gastos Consumo" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                <Bar dataKey="inversion" name="Asignación Inversión" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                <Line 
+                  type="monotone" 
+                  dataKey="saldoReal" 
+                  name="Saldo Real Líquido" 
+                  stroke="#2563eb" 
+                  strokeWidth={3} 
+                  dot={{ r: 3.5, fill: '#2563eb', strokeWidth: 1.5, stroke: '#fff' }} 
+                  activeDot={{ r: 5.5 }} 
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="saldoSimulado" 
+                  name="Saldo Previsto / Simulación" 
+                  stroke="#a855f7" 
+                  strokeWidth={3} 
+                  strokeDasharray="5 5" 
+                  dot={{ r: 3.5, fill: '#a855f7', strokeWidth: 1.5, stroke: '#fff' }} 
+                  activeDot={{ r: 5.5 }} 
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Gráfico Donut: Distribución de Gastos */}
+        <div className="min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm flex flex-col justify-between">
+          <div>
+            <h3 className="font-bold text-base text-slate-900 dark:text-white">
+              Distribución por Categorías
+            </h3>
+            <p className="text-xs text-slate-500">
+              Desglose de consumo corriente del periodo seleccionado
+            </p>
+          </div>
+
+          {distribucionCategorias.length > 0 ? (
+            <div className="h-56 w-full min-w-0 my-2">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
+                <PieChart>
+                  <Pie
+                    data={distribucionCategorias}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    paddingAngle={3}
+                    dataKey="total"
+                    nameKey="nombre"
+                    className="cursor-pointer"
+                    onClick={(entry) => {
+                      if (entry && (entry.nombre || entry.name)) {
+                        handleCategoryClick(entry.nombre || entry.name);
+                      }
+                    }}
+                  >
+                    {distribucionCategorias.map((entry, index) => {
+                      const isCatSelected = categoryFilter === entry.nombre;
+                      return (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={entry.color || COLORS[index % COLORS.length]} 
+                          stroke={isCatSelected ? '#4f46e5' : '#fff'}
+                          strokeWidth={isCatSelected ? 3 : 1}
+                        />
+                      );
+                    })}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(val) => [formatCurrency(val), 'Gasto']}
+                    contentStyle={{ 
+                      backgroundColor: 'rgba(15, 23, 42, 0.9)', 
+                      border: 'none', 
+                      borderRadius: '12px',
+                      color: '#fff',
+                      fontSize: '12px'
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-56 text-slate-400 text-xs">
+              <AlertCircle className="w-8 h-8 mb-2 opacity-50" />
+              <span>Sin gastos registrados para este periodo</span>
+            </div>
+          )}
+
+          {/* Lista de Categorías con Clic para Filtrar */}
+          <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+            {distribucionCategorias.map((cat, idx) => {
+              const isCatSelected = categoryFilter === cat.nombre;
+              return (
+                <div 
+                  key={cat.id} 
+                  onClick={() => handleCategoryClick(cat.nombre)}
+                  className={`flex items-center justify-between text-xs p-1.5 rounded-xl cursor-pointer transition-all ${
+                    isCatSelected 
+                      ? 'bg-indigo-100 dark:bg-indigo-950/80 ring-2 ring-indigo-500 font-bold shadow-xs' 
+                      : 'hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                  }`}
+                  title={`Haz clic para ver movimientos de ${cat.nombre}`}
+                >
+                  <div className="flex items-center space-x-2 truncate">
+                    <div 
+                      className="w-2.5 h-2.5 rounded-full flex-shrink-0" 
+                      style={{ backgroundColor: cat.color || COLORS[idx % COLORS.length] }} 
+                    />
+                    <span className={`truncate ${isCatSelected ? 'text-indigo-900 dark:text-indigo-200 font-black' : 'text-slate-700 dark:text-slate-300'}`}>
+                      {cat.nombre}
+                    </span>
+                  </div>
+                  <span className={`ml-2 whitespace-nowrap ${isCatSelected ? 'text-indigo-700 dark:text-indigo-300 font-black' : 'font-bold text-slate-900 dark:text-white'}`}>
+                    {formatCurrency(cat.total)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
