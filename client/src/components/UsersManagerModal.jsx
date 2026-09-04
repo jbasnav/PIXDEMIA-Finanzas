@@ -4,6 +4,7 @@ import {
   Briefcase, User, Sparkles, AlertTriangle 
 } from 'lucide-react';
 import { api, getGlobalUser, setGlobalUser } from '../services/api';
+import { useToast } from '../context/ToastContext';
 
 const ICONS_MAP = {
   Users: Users,
@@ -23,6 +24,7 @@ const PRESET_USER_COLORS = [
 ];
 
 export default function UsersManagerModal({ isOpen, onClose, onUserSwitched }) {
+  const { toast, confirmDialog } = useToast();
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeId, setActiveId] = useState(getGlobalUser());
@@ -122,7 +124,13 @@ export default function UsersManagerModal({ isOpen, onClose, onUserSwitched }) {
 
   const handleDelete = async (user, e) => {
     e.stopPropagation();
-    if (!window.confirm(`¿Estás seguro de eliminar el perfil "${user.nombre}" y todos sus datos asociados?`)) return;
+    const ok = await confirmDialog({
+      title: 'Eliminar Perfil de Usuario',
+      message: `¿Estás seguro de eliminar el perfil "${user.nombre}" y todos sus datos asociados?`,
+      confirmText: 'Sí, Eliminar Perfil',
+      type: 'danger'
+    });
+    if (!ok) return;
 
     try {
       await api.deleteUsuario(user.id);
@@ -133,8 +141,10 @@ export default function UsersManagerModal({ isOpen, onClose, onUserSwitched }) {
         setActiveId(data[0].id);
       }
       if (onUserSwitched) onUserSwitched();
+      toast.success(`Perfil "${user.nombre}" eliminado`, 'Usuarios');
     } catch (err) {
       setErrorMsg(err.message);
+      toast.error('Error al eliminar perfil: ' + err.message);
     }
   };
 

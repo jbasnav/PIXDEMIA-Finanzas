@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, ArrowRightLeft, ArrowDownRight, ArrowUpRight, Check, AlertCircle, Trash2, CheckCircle2, Clock } from 'lucide-react';
 import { api } from '../services/api';
+import { useToast } from '../context/ToastContext';
 
 export default function EditTransactionModal({ isOpen, onClose, movimiento, onTransactionUpdated, onTransactionDeleted, cuentas = [], categorias = [] }) {
+  const { toast, confirmDialog } = useToast();
   const [tipoMov, setTipoMov] = useState('gasto'); // 'gasto', 'ingreso', 'transferencia'
   const [fecha, setFecha] = useState('');
   const [cuentaId, setCuentaId] = useState('');
@@ -104,19 +106,26 @@ export default function EditTransactionModal({ isOpen, onClose, movimiento, onTr
   };
 
   const handleDelete = async () => {
-    if (window.confirm('¿Estás seguro de que deseas eliminar permanentemente este movimiento?')) {
-      try {
-        setLoading(true);
-        await api.deleteMovimiento(movimiento.id);
-        if (onTransactionDeleted) {
-          onTransactionDeleted(movimiento.id);
-        }
-        onClose();
-      } catch (err) {
-        setError(err.message || 'Error al eliminar el movimiento');
-      } finally {
-        setLoading(false);
+    const ok = await confirmDialog({
+      title: 'Eliminar Movimiento',
+      message: '¿Estás seguro de que deseas eliminar permanentemente este movimiento?',
+      confirmText: 'Sí, Eliminar',
+      type: 'danger'
+    });
+    if (!ok) return;
+
+    try {
+      setLoading(true);
+      await api.deleteMovimiento(movimiento.id);
+      if (onTransactionDeleted) {
+        onTransactionDeleted(movimiento.id);
       }
+      toast.success('Movimiento eliminado', 'Movimientos');
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Error al eliminar el movimiento');
+    } finally {
+      setLoading(false);
     }
   };
 

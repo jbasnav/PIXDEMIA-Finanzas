@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useToast } from '../context/ToastContext';
 import { 
   Calculator, 
   Truck, 
@@ -86,6 +87,7 @@ const PRESETS_PASIVO = [
 ];
 
 export default function SimulatorView() {
+  const { toast, confirmDialog } = useToast();
   const [pasivos, setPasivos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [simulating, setSimulating] = useState(false);
@@ -672,7 +674,7 @@ export default function SimulatorView() {
         }));
       }
     } catch (err) {
-      alert('Error consultando el índice oficial: ' + err.message);
+      toast.error('Error consultando el índice oficial: ' + err.message);
     } finally {
       setLoadingEuribor(false);
     }
@@ -780,28 +782,35 @@ export default function SimulatorView() {
 
       if (editingPasivoId) {
         await api.updatePasivo(editingPasivoId, payload);
-        alert(`¡${formUnified.nombre} actualizado con éxito en la cartera!`);
+        toast.success(`¡${formUnified.nombre} actualizado con éxito en la cartera!`, 'Pasivo Actualizado');
       } else {
         await api.createPasivo(payload);
-        alert(`¡${formUnified.nombre} guardado e incorporado con éxito a tus pasivos activos!`);
+        toast.success(`¡${formUnified.nombre} guardado e incorporado con éxito a tus pasivos activos!`, 'Pasivo Creado');
       }
       setEditingPasivoId(null);
       await loadPasivos();
       setActiveTab('pasivos');
     } catch (err) {
-      alert('Error guardando pasivo: ' + err.message);
+      toast.error('Error guardando pasivo: ' + err.message);
     }
   };
 
   const handleDeletePasivo = async (id) => {
-    if (window.confirm('¿Estás seguro de eliminar este préstamo/pasivo?')) {
-      try {
-        await api.deletePasivo(id);
-        if (selectedPasivoId === id) setSelectedPasivoId(null);
-        await loadPasivos();
-      } catch (err) {
-        alert('Error eliminando pasivo: ' + err.message);
-      }
+    const ok = await confirmDialog({
+      title: 'Eliminar Préstamo / Pasivo',
+      message: '¿Estás seguro de que deseas eliminar permanentemente este pasivo de tu cartera?',
+      confirmText: 'Sí, Eliminar',
+      type: 'danger'
+    });
+    if (!ok) return;
+
+    try {
+      await api.deletePasivo(id);
+      if (selectedPasivoId === id) setSelectedPasivoId(null);
+      await loadPasivos();
+      toast.success('Préstamo/pasivo eliminado de tu cartera.', 'Eliminado');
+    } catch (err) {
+      toast.error('Error eliminando pasivo: ' + err.message);
     }
   };
 

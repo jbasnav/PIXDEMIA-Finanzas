@@ -15,8 +15,10 @@ import {
   Save 
 } from 'lucide-react';
 import { api } from '../services/api';
+import { useToast } from '../context/ToastContext';
 
 export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) {
+  const { toast, confirmDialog } = useToast();
   const [activeTab, setActiveTab] = useState('export'); // 'export', 'restore', 'snapshots'
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -134,10 +136,13 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
   const handleRestoreSubmit = async () => {
     if (!previewData) return;
 
-    const confirm = window.confirm(
-      '⚠️ ATENCIÓN: Esta acción reemplazará los datos actuales con los datos de la copia de seguridad. Se creará automáticamente un punto de restauración previo. ¿Deseas continuar?'
-    );
-    if (!confirm) return;
+    const ok = await confirmDialog({
+      title: 'Restaurar Copia de Seguridad',
+      message: '⚠️ ATENCIÓN: Esta acción reemplazará los datos actuales con los datos del archivo seleccionado. Se creará automáticamente un punto de restauración previo en el servidor. ¿Deseas continuar?',
+      confirmText: 'Sí, Restaurar Base de Datos',
+      type: 'danger'
+    });
+    if (!ok) return;
 
     try {
       setLoading(true);
@@ -146,6 +151,7 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
 
       const res = await api.restoreBackup(previewData);
       setSuccessMsg(res.message || '¡Base de datos restaurada con éxito!');
+      toast.success(res.message || 'Base de datos restaurada con éxito', 'Restauración');
       if (onDataRestored) {
         onDataRestored();
       }
@@ -154,6 +160,7 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
       }, 1200);
     } catch (err) {
       setErrorMsg(err.message || 'Error restaurando la copia de seguridad');
+      toast.error(err.message || 'Error restaurando copia', 'Error');
     } finally {
       setLoading(false);
     }
@@ -161,8 +168,13 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
 
   // 6. Restaurar desde instantánea del servidor
   const handleRestoreSnapshot = async (filename) => {
-    const confirm = window.confirm(`¿Deseas restaurar la instantánea "${filename}"? Reemplazará los datos actuales.`);
-    if (!confirm) return;
+    const ok = await confirmDialog({
+      title: 'Restaurar Instantánea Local',
+      message: `¿Deseas restaurar la instantánea "${filename}"? Reemplazará los datos actuales con los de esta copia.`,
+      confirmText: 'Sí, Restaurar',
+      type: 'danger'
+    });
+    if (!ok) return;
 
     try {
       setLoading(true);
@@ -171,6 +183,7 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
 
       const res = await api.restoreBackupSnapshot(filename);
       setSuccessMsg(res.message || '¡Instantánea restaurada con éxito!');
+      toast.success(res.message || 'Instantánea restaurada con éxito', 'Restauración');
       if (onDataRestored) {
         onDataRestored();
       }
@@ -179,6 +192,7 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
       }, 1200);
     } catch (err) {
       setErrorMsg(err.message || 'Error restaurando instantánea');
+      toast.error(err.message || 'Error restaurando instantánea', 'Error');
     } finally {
       setLoading(false);
     }

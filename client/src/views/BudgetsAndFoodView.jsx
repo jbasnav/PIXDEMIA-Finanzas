@@ -44,6 +44,7 @@ import {
   ResponsiveContainer 
 } from 'recharts';
 import { api } from '../services/api';
+import { useToast } from '../context/ToastContext';
 
 const formatCurrency = (val) => {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(val || 0);
@@ -64,6 +65,7 @@ const LOGOS_PREDEFINIDOS = [
 ];
 
 export default function BudgetsAndFoodView() {
+  const { toast, confirmDialog } = useToast();
   const [activeTab, setActiveTab] = useState('suscripciones'); // 'suscripciones', 'menus', 'cesta', 'evolucion'
 
   // Estados Suscripciones
@@ -237,8 +239,9 @@ export default function BudgetsAndFoodView() {
       setIsSubModalOpen(false);
       setEditingSub(null);
       loadAllData();
+      toast.success('Suscripción guardada correctamente', 'Suscripciones');
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message, 'Error en Suscripción');
     }
   };
 
@@ -246,12 +249,25 @@ export default function BudgetsAndFoodView() {
     const nuevoEstado = sub.estado === 'activo' ? 'pausado' : 'activo';
     await api.updateSuscripcion(sub.id, { estado: nuevoEstado });
     loadAllData();
+    toast.info(`Suscripción ${sub.nombre} ${nuevoEstado === 'activo' ? 'activada' : 'pausada'}.`);
   };
 
   const handleDeleteSub = async (id) => {
-    if (!confirm('¿Deseas eliminar esta suscripción?')) return;
-    await api.deleteSuscripcion(id);
-    loadAllData();
+    const ok = await confirmDialog({
+      title: 'Eliminar Suscripción',
+      message: '¿Estás seguro de que deseas eliminar esta suscripción recurrente?',
+      confirmText: 'Sí, Eliminar',
+      type: 'danger'
+    });
+    if (!ok) return;
+
+    try {
+      await api.deleteSuscripcion(id);
+      loadAllData();
+      toast.success('Suscripción eliminada', 'Suscripciones');
+    } catch (err) {
+      toast.error('Error al eliminar suscripción: ' + err.message);
+    }
   };
 
   // Abrir editor de un día específico del menú
@@ -306,8 +322,9 @@ export default function BudgetsAndFoodView() {
       });
       setIsEditDayModalOpen(false);
       loadAllData();
+      toast.success('Menú del día actualizado con éxito', 'Planificador Semanal');
     } catch (err) {
-      alert('Error al guardar día del menú: ' + err.message);
+      toast.error('Error al guardar día del menú: ' + err.message);
     }
   };
 
@@ -352,8 +369,9 @@ export default function BudgetsAndFoodView() {
       setIsProdModalOpen(false);
       setProdForm({ nombre: '', categoria: 'Despensa y Básicos', unidad_medida: 'kg', precio_referencia_actual: 1.50, comercio_habitual: 'Eroski', notas: '' });
       loadAllData();
+      toast.success('Producto añadido a la base de precios', 'Alimentación');
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message, 'Error Producto');
     }
   };
 
@@ -363,8 +381,9 @@ export default function BudgetsAndFoodView() {
       await api.registrarPrecioComercio(priceForm);
       setIsPriceModalOpen(false);
       loadAllData();
+      toast.success('Precio registrado correctamente', 'Supermercados');
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message, 'Error Precio');
     }
   };
 
@@ -375,8 +394,9 @@ export default function BudgetsAndFoodView() {
       setIsPersonaModalOpen(false);
       setPersonaForm({ nombre: '', rol: 'Adulto', factor_consumo: 1.0, activo: true, notas: '' });
       loadAllData();
+      toast.success('Miembro del hogar guardado', 'Comensales');
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message, 'Error Miembro');
     }
   };
 

@@ -70,3 +70,49 @@ Este documento establece las reglas visuales, de maquetación y de tipografía p
   * Línea punteada morada (`#a855f7`): **Saldo Proyectado / Simulación** (meses futuros).
 * **Interacción**:
   * La selección de mes se realiza directamente haciendo clic en las barras interactivas del gráfico.
+
+---
+
+## 6. 💬 Mensajes de Confirmación y Notificaciones (Cero Alertas Nativas del Sistema)
+* **Prohibición estricta**: Queda terminantemente prohibido utilizar las ventanas modales nativas del navegador (`window.alert()` y `window.confirm()`).
+* **Línea de diseño obligatoria**:
+  * **Notificaciones Flotantes (Toasts)**: Usar el hook `useToast()` (`toast.success()`, `toast.error()`, `toast.warning()`, `toast.info()`). Toasts con bordes redondeados (`rounded-2xl`), efecto cristal (`backdrop-blur-md`), colores semánticos con badges, temporizador de auto-cierre y botón de descartar.
+  * **Modales de Confirmación**: Usar `confirmDialog({ title, message, confirmText, cancelText, type: 'danger' | 'warning' | 'info' })`. Modal centrado con fondo desenfocado (`backdrop-blur-sm`), tarjeta blanca/oscura (`dark:bg-slate-900`), icono descriptivo de gran tamaño y botones estilizados acordes a la acción.
+
+---
+
+## 7. 🎛️ Modales y Formularios de Creación / Edición
+* **No solapamiento**: Los selectores de color identificativo, iconos o campos complementarios nunca deben montarse sobre otros elementos ni etiquetas. Deben colocarse en su propia línea con una separación visual adecuada (`space-y-4` o grid responsive).
+* **Accesibilidad y ergonomía**:
+  * Todos los inputs deben contar con labels claras, contrastadas y formateadas con `text-xs font-bold uppercase tracking-wider`.
+  * Los botones principales de acción deben destacar con sombras de color (`shadow-lg shadow-indigo-600/25`) y transiciones suaves (`transition-all`).
+
+---
+
+## 8. 💳 Movimientos de Tarjeta vs Cuenta
+* **Diferenciación conceptual**: Los movimientos propios de una tarjeta de crédito/débito deben poder consultarse de forma desglosada haciendo clic en el apunte bancario correspondiente de la cuenta corriente.
+* **Modal de desglose interactivo**: Un modal estilizado (`CardBreakdownModal`) muestra la lista de compras individuales vinculadas a ese cargo agrupado, permitiendo añadir, editar y eliminar gastos de tarjeta con cálculo automático del importe total.
+
+---
+
+## 9. 🏛️ Estructura y Jerarquía del Dashboard
+* **Orden de bloques**:
+  1. **Cabecera y Resumen Patrimonial Global** (Saldo total actual, desglose por bancos a primeros de mes y a fecha actual).
+  2. **Evolución de Saldos y Previsiones Anuales** (Gráfico y KPIs de evolución temporal).
+  3. **Detalle de Movimientos del Mes** (con filtros, ordenación por estado Real/Previsto y sin duplicar KPIs redundantes de ingresos/gastos).
+  4. **Matriz Anual Financiera y Gráfica de Distribución de Gastos** (al final de la vista para consulta analítica profunda).
+
+---
+
+## 10. 🧮 Simulador de Préstamos y Pasivos
+* **Consistencia matemática trilateral**: En todo momento deben mantenerse sincronizados la **Fecha Fin Prevista**, el **Plazo Restante** y la **Cuota Mensual** mediante amortización francesa ($PMT = C \cdot \frac{r(1+r)^n}{(1+r)^n-1}$).
+* **Multíndice de Referencia**: Soporte para *Euríbor 12M, Euríbor 6M, Euríbor 3M, IRPH Entidades, Míbor y Personalizado*.
+* **Cuota Teórica Estimada vs Real Bancaria**: La tabla histórica anual debe mostrar la cuota calculada teóricamente según el índice oficial de ese año, permitiendo introducir la cuota real cobrada por el banco y restablecer la teórica con un botón de reseteo.
+
+---
+
+## 11. 💾 Respaldo y Continuidad de Datos (Backups)
+* **Acceso global**: Botón en la barra de navegación con icono de base de datos.
+* **Formatos**: Descarga directa de base de datos SQLite `.db`, exportación completa en formato JSON y gestión de snapshots locales en el servidor.
+* **Seguridad pre-restauración**: Antes de restaurar cualquier copia, se genera automáticamente una instantánea de seguridad previa de respaldo.
+

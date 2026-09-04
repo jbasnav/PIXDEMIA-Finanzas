@@ -4,6 +4,7 @@ import {
   CreditCard, CheckCircle2, AlertTriangle, RefreshCw, Sparkles 
 } from 'lucide-react';
 import { api } from '../services/api';
+import { useToast } from '../context/ToastContext';
 
 const ACCOUNT_TYPES = [
   { value: 'corriente', label: 'Cuenta Corriente / Operativa', icon: Wallet, desc: 'Para gastos corrientes, recibos y nóminas' },
@@ -27,6 +28,7 @@ const PRESET_COLORS = [
 ];
 
 export default function AccountsManagerModal({ isOpen, onClose, onAccountsUpdated }) {
+  const { toast, confirmDialog } = useToast();
   const [cuentas, setCuentas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -140,14 +142,22 @@ export default function AccountsManagerModal({ isOpen, onClose, onAccountsUpdate
       ? `La cuenta "${cuenta.nombre}" tiene ${cuenta.total_movimientos} movimientos registrados. ¿Deseas eliminarla junto con todos sus movimientos? (Esta acción no se puede deshacer)`
       : `¿Estás seguro de eliminar la cuenta "${cuenta.nombre}"?`;
 
-    if (!window.confirm(confirmMsg)) return;
+    const ok = await confirmDialog({
+      title: 'Eliminar Cuenta Bancaria',
+      message: confirmMsg,
+      confirmText: 'Sí, Eliminar Cuenta',
+      type: 'danger'
+    });
+    if (!ok) return;
 
     try {
       await api.deleteCuenta(cuenta.id, cuenta.total_movimientos > 0);
       await loadCuentas();
       if (onAccountsUpdated) onAccountsUpdated();
+      toast.success(`Cuenta "${cuenta.nombre}" eliminada`, 'Cuentas');
     } catch (err) {
       setErrorMsg(err.message);
+      toast.error('Error al eliminar cuenta: ' + err.message);
     }
   };
 

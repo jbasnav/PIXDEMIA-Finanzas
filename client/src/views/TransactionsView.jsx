@@ -24,10 +24,12 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatDate, MONTHS } from '../utils/formatters';
 import { api } from '../services/api';
+import { useToast } from '../context/ToastContext';
 import EditTransactionModal from '../components/EditTransactionModal';
 import CardBreakdownModal from '../components/CardBreakdownModal';
 
 export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refreshTrigger }) {
+  const { toast, confirmDialog } = useToast();
   const [movimientos, setMovimientos] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -139,13 +141,20 @@ export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refresh
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('¿Estás seguro de que deseas eliminar este movimiento?')) {
-      try {
-        await api.deleteMovimiento(id);
-        loadTransactions();
-      } catch (err) {
-        alert('Error al eliminar movimiento: ' + err.message);
-      }
+    const ok = await confirmDialog({
+      title: 'Eliminar Movimiento',
+      message: '¿Estás seguro de que deseas eliminar permanentemente este movimiento?',
+      confirmText: 'Sí, Eliminar',
+      type: 'danger'
+    });
+    if (!ok) return;
+
+    try {
+      await api.deleteMovimiento(id);
+      loadTransactions();
+      toast.success('Movimiento eliminado correctamente', 'Eliminado');
+    } catch (err) {
+      toast.error('Error al eliminar movimiento: ' + err.message);
     }
   };
 

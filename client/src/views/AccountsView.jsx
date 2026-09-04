@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { WalletCards, Plus, Edit2, Check, X, ShieldAlert, Sparkles } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
 import { api } from '../services/api';
+import { useToast } from '../context/ToastContext';
 
 export default function AccountsView({ onOpenQuickAdd }) {
+  const { toast } = useToast();
   const [cuentas, setCuentas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
@@ -42,8 +44,9 @@ export default function AccountsView({ onOpenQuickAdd }) {
       await api.updateCuenta(id, editForm);
       setEditingId(null);
       loadCuentas();
+      toast.success('Cuenta actualizada correctamente', 'Cuenta');
     } catch (err) {
-      alert('Error al actualizar cuenta: ' + err.message);
+      toast.error('Error al actualizar cuenta: ' + err.message);
     }
   };
 
@@ -54,8 +57,9 @@ export default function AccountsView({ onOpenQuickAdd }) {
       setShowAddForm(false);
       setNewAccount({ nombre: '', tipo: 'corriente', saldo_inicial_2026: 0, color_hex: '#3b82f6' });
       loadCuentas();
+      toast.success('Cuenta bancaria creada con éxito', 'Nueva Cuenta');
     } catch (err) {
-      alert('Error al crear cuenta: ' + err.message);
+      toast.error('Error al crear cuenta: ' + err.message);
     }
   };
 
