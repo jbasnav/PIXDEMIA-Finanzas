@@ -468,6 +468,32 @@ function initSchemaAndSeeds() {
     }
   }
 
+  // Asegurar precios comparativos de BM, DIA y ALDI
+  try {
+    const prods = rawDb.exec('SELECT id, precio_referencia_actual FROM productos_alimentacion');
+    if (prods && prods[0]?.values) {
+      for (const [pId, pRef] of prods[0].values) {
+        const hasBM = rawDb.exec(`SELECT id FROM precios_historico_comercios WHERE producto_id = ${pId} AND comercio = 'BM'`)[0]?.values?.length > 0;
+        if (!hasBM) {
+          rawDb.run('INSERT INTO precios_historico_comercios (producto_id, comercio, precio, fecha_registro) VALUES (?, ?, ?, ?)',
+            [pId, 'BM', Number((pRef * 1.02).toFixed(2)), '2026-02-25']);
+        }
+        const hasDIA = rawDb.exec(`SELECT id FROM precios_historico_comercios WHERE producto_id = ${pId} AND comercio = 'DIA'`)[0]?.values?.length > 0;
+        if (!hasDIA) {
+          rawDb.run('INSERT INTO precios_historico_comercios (producto_id, comercio, precio, fecha_registro) VALUES (?, ?, ?, ?)',
+            [pId, 'DIA', Number((pRef * 0.97).toFixed(2)), '2026-02-25']);
+        }
+        const hasALDI = rawDb.exec(`SELECT id FROM precios_historico_comercios WHERE producto_id = ${pId} AND comercio = 'ALDI'`)[0]?.values?.length > 0;
+        if (!hasALDI) {
+          rawDb.run('INSERT INTO precios_historico_comercios (producto_id, comercio, precio, fecha_registro) VALUES (?, ?, ?, ?)',
+            [pId, 'ALDI', Number((pRef * 0.94).toFixed(2)), '2026-02-25']);
+        }
+      }
+    }
+  } catch (e) {
+    // Ignorar si falla
+  }
+
   // Semillas de Menús Planificados
   const menusCountRes = rawDb.exec('SELECT COUNT(*) as count FROM menus_planificados');
   const menusCount = menusCountRes[0]?.values[0][0] || 0;

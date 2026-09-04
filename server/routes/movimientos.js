@@ -414,6 +414,7 @@ router.put('/:id', (req, res) => {
             subcategoria = COALESCE(?, subcategoria),
             concepto = COALESCE(?, concepto),
             importe = COALESCE(?, importe),
+            cuenta_destino_id = ?,
             pasivo_id = ?,
             etiqueta_especial = COALESCE(?, etiqueta_especial),
             notas = COALESCE(?, notas)
@@ -427,6 +428,7 @@ router.put('/:id', (req, res) => {
         subcategoria,
         concepto,
         importe !== undefined ? Number(importe) : null,
+        cuenta_destino_id !== undefined ? (cuenta_destino_id ? Number(cuenta_destino_id) : null) : oldMov.cuenta_destino_id,
         pasivo_id !== undefined ? (pasivo_id ? Number(pasivo_id) : null) : oldMov.pasivo_id,
         etiqueta_especial,
         notas,
@@ -467,7 +469,7 @@ router.put('/:id', (req, res) => {
   }
 });
 
-// Convertir movimiento en serie repetitiva / Generar ocurrencias futuras
+// Convertir movimiento en serie repetitiva / Generar ocurrencias futuras / Agrupar serie
 router.post('/:id/convertir-en-serie', (req, res) => {
   try {
     const mov = db.prepare('SELECT * FROM movimientos WHERE id = ?').get(req.params.id);
@@ -479,7 +481,8 @@ router.post('/:id/convertir-en-serie', (req, res) => {
       fecha_inicio = null,
       fecha_fin = null,
       numero_cuotas = 12,
-      eliminar_futuros_existentes = true
+      eliminar_futuros_existentes = true,
+      agrupar_existentes = true
     } = req.body;
 
     // Asignar o mantener serie_id
@@ -494,6 +497,27 @@ router.post('/:id/convertir-en-serie', (req, res) => {
       db.prepare('UPDATE movimientos SET frecuencia_recurrencia = ? WHERE id = ?')
         .run(frecuencia, mov.id);
       mov.frecuencia_recurrencia = frecuencia;
+    }
+
+    // Auto-identificar y agrupar todos los movimientos existentes coincidentes en la base de datos
+    if (agrupar_existentes && mov.concepto && mov.concepto.trim()) {
+      const cleanConcepto = mov.concepto.trim();
+      db.prepare(`
+        UPDATE movimientos 
+        SET serie_id = ?,
+            frecuencia_recurrencia = ?,
+            cuenta_destino_id = COALESCE(?, cuenta_destino_id),
+            pasivo_id = COALESCE(?, pasivo_id)
+        WHERE (serie_id IS NULL OR serie_id = '' OR serie_id != ?)
+          AND LOWER(TRIM(concepto)) = LOWER(TRIM(?))
+      `).run(
+        serieId, 
+        frecuencia, 
+        mov.cuenta_destino_id || null, 
+        mov.pasivo_id || null, 
+        serieId, 
+        cleanConcepto
+      );
     }
 
     const fechaBase = fecha_inicio || mov.fecha;
@@ -525,9 +549,20 @@ router.post('/:id/convertir-en-serie', (req, res) => {
 
     const generatedIds = [];
     for (const f of fechasFuturas) {
-      // Evitar duplicar en la misma fecha para la misma serie
-      const existe = db.prepare('SELECT id FROM movimientos WHERE serie_id = ? AND fecha = ?').get(serieId, f);
-      if (!existe) {
+      // Evitar duplicar en la misma fecha para la misma serie o con el mismo concepto
+      const existeSerie = db.prepare('SELECT id FROM movimientos WHERE serie_id = ? AND fecha = ?').get(serieId, f);
+      if (existeSerie) continue;
+
+      const existeConcepto = db.prepare(`
+        SELECT id FROM movimientos 
+        WHERE fecha = ? AND cuenta_id = ? AND LOWER(TRIM(concepto)) = LOWER(TRIM(?))
+      `).get(f, mov.cuenta_id, mov.concepto.trim());
+
+      if (existeConcepto) {
+        db.prepare('UPDATE movimientos SET serie_id = ?, frecuencia_recurrencia = ? WHERE id = ?')
+          .run(serieId, frecuencia, existeConcepto.id);
+        generatedIds.push(existeConcepto.id);
+      } else {
         const info = insertStmt.run(
           mov.usuario_id || 1,
           f,

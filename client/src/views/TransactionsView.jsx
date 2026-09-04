@@ -22,7 +22,8 @@ import {
   Clock,
   CreditCard,
   Landmark,
-  Repeat
+  Repeat,
+  TrendingUp
 } from 'lucide-react';
 import { formatCurrency, formatDate, MONTHS } from '../utils/formatters';
 import { api } from '../services/api';
@@ -45,6 +46,9 @@ export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refresh
   const [busqueda, setBusqueda] = useState('');
   const [cuentaId, setCuentaId] = useState('');
   const [categoriaId, setCategoriaId] = useState('');
+  const [ano, setAno] = useState(() => {
+    return localStorage.getItem('pixdemia_selected_year') || '2026';
+  });
   const [mes, setMes] = useState('');
   const [etiqueta, setEtiqueta] = useState('');
   const [esTransferencia, setEsTransferencia] = useState('');
@@ -62,6 +66,16 @@ export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refresh
     } else {
       setSortField(field);
       setSortDirection(field === 'fecha' || field === 'importe' ? 'desc' : 'asc');
+    }
+    setPage(0);
+  };
+
+  const handleYearChange = (newYear) => {
+    setAno(newYear);
+    if (newYear) {
+      localStorage.setItem('pixdemia_selected_year', newYear);
+    } else {
+      localStorage.removeItem('pixdemia_selected_year');
     }
     setPage(0);
   };
@@ -101,6 +115,7 @@ export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refresh
         busqueda,
         cuenta_id: cuentaId,
         categoria_id: categoriaId,
+        ano: ano || undefined,
         mes,
         etiqueta_especial: etiqueta,
         es_transferencia: esTransferencia !== '' ? esTransferencia : undefined,
@@ -125,7 +140,7 @@ export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refresh
 
   useEffect(() => {
     loadTransactions();
-  }, [busqueda, cuentaId, categoriaId, mes, etiqueta, esTransferencia, esConsolidadoFilter, sortField, sortDirection, page, refreshTrigger]);
+  }, [busqueda, cuentaId, categoriaId, ano, mes, etiqueta, esTransferencia, esConsolidadoFilter, sortField, sortDirection, page, refreshTrigger]);
 
   const handleEdit = (m) => {
     setEditingMovimiento(m);
@@ -255,8 +270,21 @@ export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refresh
         </div>
 
         {/* Filtros desplegables */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
           
+          {/* Año */}
+          <select
+            value={ano}
+            onChange={(e) => handleYearChange(e.target.value)}
+            className="px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200 font-black focus:outline-none cursor-pointer"
+          >
+            <option value="">Todos los Años</option>
+            <option value="2026">Año 2026</option>
+            <option value="2027">Año 2027</option>
+            <option value="2028">Año 2028</option>
+            <option value="2029">Año 2029</option>
+          </select>
+
           {/* Cuenta */}
           <select
             value={cuentaId}
@@ -491,7 +519,7 @@ export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refresh
                           {m.serie_id && (
                             <span 
                               className="inline-flex items-center space-x-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
-                              title={`Serie ${m.frecuencia_recurrencia || 'Recurrente'}`}
+                              title={`Serie ${m.frecuencia_recurrencia || 'Recurrente'} (Gasto Tipo 2)`}
                             >
                               <Repeat className="w-2.5 h-2.5 text-purple-600 dark:text-purple-400" />
                               <span className="capitalize">{m.frecuencia_recurrencia || 'Serie'}</span>
@@ -504,6 +532,15 @@ export default function TransactionsView({ onOpenQuickAdd, onOpenImport, refresh
                             >
                               <Landmark className="w-2.5 h-2.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
                               <span className="truncate">{m.pasivo_nombre}</span>
+                            </span>
+                          )}
+                          {m.cuenta_destino_nombre && !isTransfer && (
+                            <span 
+                              className="inline-flex items-center space-x-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 truncate max-w-[150px]"
+                              title={`Aportación destinada a: ${m.cuenta_destino_nombre}`}
+                            >
+                              <TrendingUp className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                              <span className="truncate">➔ {m.cuenta_destino_nombre}</span>
                             </span>
                           )}
                           {(m.concepto?.toUpperCase().includes('GASTOS TARJETA') || m.subcategoria?.toUpperCase().includes('GASTOS TARJETA')) && (

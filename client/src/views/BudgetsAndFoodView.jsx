@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Tv, 
   Film, 
@@ -26,12 +26,22 @@ import {
   ChefHat, 
   Tag,
   ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   ShoppingBasket,
+  ShoppingCart,
   Image as ImageIcon,
   Check,
+  CheckSquare,
+  Square,
   Search,
   ChevronRight,
-  Info
+  Info,
+  Copy,
+  RotateCcw,
+  Percent,
+  Award,
+  ExternalLink
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -64,9 +74,11 @@ const LOGOS_PREDEFINIDOS = [
   { nombre: 'YouTube', url: '/logos/youtube.svg', color: '#ff0000' }
 ];
 
+const DEFAULT_SUPERMERCADOS = ['Eroski', 'Mercadona', 'Lidl', 'BM', 'DIA', 'ALDI', 'Comercio Local'];
+
 export default function BudgetsAndFoodView() {
   const { toast, confirmDialog } = useToast();
-  const [activeTab, setActiveTab] = useState('suscripciones'); // 'suscripciones', 'menus', 'cesta', 'evolucion'
+  const [activeTab, setActiveTab] = useState('catalogo'); // 'suscripciones', 'menus', 'catalogo', 'cesta', 'evolucion'
 
   // Estados Suscripciones
   const [suscripciones, setSuscripciones] = useState([]);
@@ -92,10 +104,46 @@ export default function BudgetsAndFoodView() {
   const [productos, setProductos] = useState([]);
   const [menus, setMenus] = useState([]);
   const [selectedMenu, setSelectedMenu] = useState(null);
-  const [comercioFiltroMenu, setComercioFiltroMenu] = useState('mejor_precio'); // 'mejor_precio', 'Eroski', 'Mercadona', 'Lidl', 'Carnicería Local'
+  const [comercioFiltroMenu, setComercioFiltroMenu] = useState('mejor_precio'); // 'mejor_precio', 'Eroski', 'Mercadona', 'Lidl', 'BM', 'DIA', 'ALDI', 'Carnicería Local'
   const [personas, setPersonas] = useState([]);
   const [historicoPrecios, setHistoricoPrecios] = useState({ registros: [], timeline: [] });
   const [selectedProductoGrafica, setSelectedProductoGrafica] = useState('');
+
+  // Supermercados y Comercios
+  const [comerciosList, setComerciosList] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pixdemia_supermercados_v1');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return DEFAULT_SUPERMERCADOS;
+  });
+  const [isAddComercioModalOpen, setIsAddComercioModalOpen] = useState(false);
+  const [newComercioName, setNewComercioName] = useState('');
+
+  // Ordenación y Filtros de la Tabla de Catálogo & Comparador
+  const [sortKey, setSortKey] = useState('nombre');
+  const [sortOrder, setSortOrder] = useState('asc'); // 'asc' | 'desc'
+  const [busquedaProd, setBusquedaProd] = useState('');
+  const [categoriaFiltroProd, setCategoriaFiltroProd] = useState('');
+
+  // Estados del Carrito de la Compra Inteligente
+  const [carrito, setCarrito] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pixdemia_carrito_v2');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [];
+  });
+  const [quickAddSearch, setQuickAddSearch] = useState('');
+
+  // Guardar cambios en el carrito y lista de comercios en localStorage
+  useEffect(() => {
+    localStorage.setItem('pixdemia_carrito_v2', JSON.stringify(carrito));
+  }, [carrito]);
+
+  useEffect(() => {
+    localStorage.setItem('pixdemia_supermercados_v1', JSON.stringify(comerciosList));
+  }, [comerciosList]);
 
   // Modales y Editores de Menú
   const [isEditDayModalOpen, setIsEditDayModalOpen] = useState(false);
@@ -361,44 +409,322 @@ export default function BudgetsAndFoodView() {
     setEditingDayData(prev => ({ ...prev, [listKey]: list }));
   };
 
-  // Manejo de Productos y Precios
-  const handleSaveProduct = async (e) => {
-    e.preventDefault();
-    try {
-      await api.createProductoAlimentacion(prodForm);
-      setIsProdModalOpen(false);
-      setProdForm({ nombre: '', categoria: 'Despensa y Básicos', unidad_medida: 'kg', precio_referencia_actual: 1.50, comercio_habitual: 'Eroski', notas: '' });
-      loadAllData();
-      toast.success('Producto añadido a la base de precios', 'Alimentación');
-    } catch (err) {
-      toast.error(err.message, 'Error Producto');
+  // Ordenación de la tabla
+  const handleSort = (key) => {
+    if (sortKey === key) {
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortOrder('asc');
     }
   };
 
-  const handleSavePrice = async (e) => {
-    e.preventDefault();
-    try {
-      await api.registrarPrecioComercio(priceForm);
-      setIsPriceModalOpen(false);
-      loadAllData();
-      toast.success('Precio registrado correctamente', 'Supermercados');
-    } catch (err) {
-      toast.error(err.message, 'Error Precio');
+  // Añadir nuevo supermercado dinámico
+  const handleAddComercio = (e) => {
+    if (e) e.preventDefault();
+    const clean = newComercioName.trim();
+    if (!clean) return;
+    if (comerciosList.some(c => c.toLowerCase() === clean.toLowerCase())) {
+      toast.warning('Este supermercado ya está en la lista', 'Supermercados');
+      return;
+    }
+    const updated = [...comerciosList, clean];
+    setComerciosList(updated);
+    setNewComercioName('');
+    setIsAddComercioModalOpen(false);
+    toast.success(`Supermercado "${clean}" añadido al comparador`, 'Supermercados');
+  };
+
+  // Carrito: Añadir producto individual
+  const handleAgregarProductoACarrito = (prod, cantidad = 1) => {
+    if (!prod) return;
+    setCarrito(prev => {
+      const idx = prev.findIndex(item => item.producto_id === prod.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx].cantidad = Number((copy[idx].cantidad + cantidad).toFixed(2));
+        return copy;
+      } else {
+        return [
+          ...prev,
+          {
+            id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            producto_id: prod.id,
+            nombre: prod.nombre,
+            categoria: prod.categoria,
+            unidad_medida: prod.unidad_medida,
+            cantidad: Number(cantidad),
+            comprado: false
+          }
+        ];
+      }
+    });
+    toast.success(`"${prod.nombre}" añadido a la cesta`, 'Carrito');
+  };
+
+  // Carrito: Pasar todos los ingredientes del menú semanal a la Cesta
+  const handlePasarMenuACarrito = (menu) => {
+    if (!menu) return;
+    const dias = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
+    const itemsToAddMap = new Map();
+
+    // 1. Extraer ingredientes explícitos
+    dias.forEach(d => {
+      const diaObj = menu.detalles?.[d];
+      if (diaObj) {
+        const allIngs = [...(diaObj.ingredientesComida || []), ...(diaObj.ingredientesCena || [])];
+        allIngs.forEach(ing => {
+          const prod = productos.find(p => p.id === Number(ing.producto_id));
+          if (prod) {
+            const currentQty = itemsToAddMap.get(prod.id)?.cantidad || 0;
+            itemsToAddMap.set(prod.id, {
+              producto_id: prod.id,
+              nombre: prod.nombre,
+              categoria: prod.categoria,
+              unidad_medida: prod.unidad_medida,
+              cantidad: currentQty + (Number(ing.cantidad) || 1)
+            });
+          }
+        });
+      }
+    });
+
+    // 2. Si el menú tiene recetas escritas pero no ingredientes con ID enlazados, emparejar automáticamente
+    if (itemsToAddMap.size === 0) {
+      const keywordMap = [
+        { kw: 'pollo', prodName: 'Pechuga de Pollo Fileteada 1kg', qty: 2 },
+        { kw: 'ternera', prodName: 'Filetes de Ternera 1kg', qty: 1.5 },
+        { kw: 'salmón', prodName: 'Salmón Fresco 1kg', qty: 1 },
+        { kw: 'salmon', prodName: 'Salmón Fresco 1kg', qty: 1 },
+        { kw: 'lenteja', prodName: 'Arroz Redondo 1kg', qty: 1 },
+        { kw: 'alubia', prodName: 'Arroz Redondo 1kg', qty: 1 },
+        { kw: 'arroz', prodName: 'Arroz Redondo 1kg', qty: 2 },
+        { kw: 'huevo', prodName: 'Huevos Camperos (Docena)', qty: 2 },
+        { kw: 'tortilla', prodName: 'Huevos Camperos (Docena)', qty: 1 },
+        { kw: 'macarron', prodName: 'Pasta Macarrones 1kg', qty: 2 },
+        { kw: 'pasta', prodName: 'Pasta Macarrones 1kg', qty: 1 },
+        { kw: 'tomate', prodName: 'Tomate Ensalada 1kg', qty: 2 },
+        { kw: 'plátano', prodName: 'Plátano de Canarias 1kg', qty: 2 },
+        { kw: 'platano', prodName: 'Plátano de Canarias 1kg', qty: 2 },
+        { kw: 'pan', prodName: 'Pan Rústico Barra', qty: 5 },
+        { kw: 'leche', prodName: 'Leche Entera 1L', qty: 6 },
+        { kw: 'yogur', prodName: 'Yogur Natural Pack 8', qty: 2 },
+        { kw: 'aceite', prodName: 'Aceite de Oliva V. Extra 1L', qty: 1 }
+      ];
+
+      // Analizar todo el texto del menú
+      const fullText = JSON.stringify(menu.detalles || '').toLowerCase();
+      keywordMap.forEach(({ kw, prodName, qty }) => {
+        if (fullText.includes(kw)) {
+          const prod = productos.find(p => p.nombre.toLowerCase().includes(prodName.toLowerCase()) || prodName.toLowerCase().includes(p.nombre.toLowerCase()));
+          if (prod) {
+            itemsToAddMap.set(prod.id, {
+              producto_id: prod.id,
+              nombre: prod.nombre,
+              categoria: prod.categoria,
+              unidad_medida: prod.unidad_medida,
+              cantidad: qty
+            });
+          }
+        }
+      });
+
+      // Si aún estuviera vacío, añadir cesta básica semanal familiar
+      if (itemsToAddMap.size === 0 && productos.length > 0) {
+        productos.slice(0, 8).forEach(p => {
+          itemsToAddMap.set(p.id, {
+            producto_id: p.id,
+            nombre: p.nombre,
+            categoria: p.categoria,
+            unidad_medida: p.unidad_medida,
+            cantidad: 1
+          });
+        });
+      }
+    }
+
+    const newItems = Array.from(itemsToAddMap.values()).map(it => ({
+      id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      ...it,
+      comprado: false
+    }));
+
+    setCarrito(newItems);
+    setActiveTab('cesta');
+    toast.success(`🛒 ${newItems.length} productos del menú transferidos al Carrito de la Compra`, 'Cesta Inteligente');
+  };
+
+  // Carrito: Modificar cantidad
+  const handleUpdateCantidadCarrito = (itemId, delta) => {
+    setCarrito(prev => prev.map(item => {
+      if (item.id === itemId) {
+        const newQty = Number((item.cantidad + delta).toFixed(2));
+        return newQty > 0 ? { ...item, cantidad: newQty } : null;
+      }
+      return item;
+    }).filter(Boolean));
+  };
+
+  // Carrito: Toggle Comprado
+  const handleToggleComprado = (itemId) => {
+    setCarrito(prev => prev.map(item => item.id === itemId ? { ...item, comprado: !item.comprado } : item));
+  };
+
+  // Carrito: Eliminar item
+  const handleEliminarItemCarrito = (itemId) => {
+    setCarrito(prev => prev.filter(item => item.id !== itemId));
+  };
+
+  // Carrito: Vaciar
+  const handleVaciarCarrito = async () => {
+    const ok = await confirmDialog({
+      title: 'Vaciar Carrito de la Compra',
+      message: '¿Deseas eliminar todos los productos de la lista de la compra?',
+      confirmText: 'Sí, Vaciar',
+      type: 'warning'
+    });
+    if (ok) {
+      setCarrito([]);
+      toast.info('Carrito de la compra vaciado');
     }
   };
 
-  const handleSavePersona = async (e) => {
-    e.preventDefault();
-    try {
-      await api.createPersonaHogar(personaForm);
-      setIsPersonaModalOpen(false);
-      setPersonaForm({ nombre: '', rol: 'Adulto', factor_consumo: 1.0, activo: true, notas: '' });
-      loadAllData();
-      toast.success('Miembro del hogar guardado', 'Comensales');
-    } catch (err) {
-      toast.error(err.message, 'Error Miembro');
+  // Carrito: Copiar lista al portapapeles
+  const handleCopiarLista = (cestaOptima) => {
+    if (carrito.length === 0) return;
+    let txt = `🛒 LISTA DE LA COMPRA - FINANZAS\n`;
+    txt += `Total artículos: ${carrito.length}\n\n`;
+
+    if (cestaOptima && Object.keys(cestaOptima.porComercio).length > 0) {
+      txt += `✨ DÓNDE COMPRAR CADA COSA (Cesta Óptima - Total: ${formatCurrency(cestaOptima.totalOptimo)}):\n`;
+      Object.entries(cestaOptima.porComercio).forEach(([comercio, items]) => {
+        txt += `\n🏪 ${comercio.toUpperCase()}:\n`;
+        items.forEach(it => {
+          txt += `  [ ] ${it.nombre} x ${it.cantidad} ${it.unidad_medida} (${formatCurrency(it.subtotal)})\n`;
+        });
+      });
+    } else {
+      txt += `📋 ARTÍCULOS:\n`;
+      carrito.forEach(it => {
+        txt += `  [${it.comprado ? 'X' : ' '}] ${it.nombre}: ${it.cantidad} ${it.unidad_medida}\n`;
+      });
     }
+
+    navigator.clipboard.writeText(txt);
+    toast.success('Lista de la compra copiada al portapapeles. ¡Lista para WhatsApp o tu móvil!', 'Portapapeles');
   };
+
+  // Análisis y comparativa inteligente de la cesta
+  const analisisCarrito = useMemo(() => {
+    if (carrito.length === 0) {
+      return { totalesPorComercio: {}, ganadorMonotienda: null, masCaroMonotienda: null, ahorroMonotienda: 0, cestaOptima: { totalOptimo: 0, porComercio: {}, ahorroMaximo: 0 } };
+    }
+
+    // 1. Coste total por cada supermercado
+    const totalesPorComercio = {};
+
+    comerciosList.forEach(comercio => {
+      let total = 0;
+      let count = 0;
+      carrito.forEach(item => {
+        const prod = productos.find(p => p.id === item.producto_id);
+        const precio = prod?.preciosPorComercio?.[comercio] || prod?.precio_referencia_actual || 0;
+        total += (precio * (item.cantidad || 1));
+        if (prod?.preciosPorComercio?.[comercio]) count++;
+      });
+      totalesPorComercio[comercio] = {
+        comercio,
+        total: Number(total.toFixed(2)),
+        itemsConPrecio: count
+      };
+    });
+
+    const listaOrdenada = Object.values(totalesPorComercio).sort((a, b) => a.total - b.total);
+    const ganadorMonotienda = listaOrdenada[0] || null;
+    const masCaroMonotienda = listaOrdenada[listaOrdenada.length - 1] || null;
+    const ahorroMonotienda = (masCaroMonotienda && ganadorMonotienda) ? Number((masCaroMonotienda.total - ganadorMonotienda.total).toFixed(2)) : 0;
+
+    // 2. Cesta Óptima Multitienda («Dónde comprar cada cosa»)
+    const porComercio = {};
+    let totalOptimo = 0;
+
+    carrito.forEach(item => {
+      const prod = productos.find(p => p.id === item.producto_id);
+      let bestComercio = 'Eroski';
+      let minPrice = Infinity;
+
+      if (prod && prod.preciosPorComercio) {
+        comerciosList.forEach(c => {
+          const pr = prod.preciosPorComercio[c];
+          if (typeof pr === 'number' && pr > 0 && pr < minPrice) {
+            minPrice = pr;
+            bestComercio = c;
+          }
+        });
+      }
+
+      if (minPrice === Infinity) {
+        minPrice = prod?.precio_referencia_actual || 1.0;
+        bestComercio = prod?.comercio_habitual || 'Eroski';
+      }
+
+      const subtotal = Number((minPrice * (item.cantidad || 1)).toFixed(2));
+      totalOptimo += subtotal;
+
+      if (!porComercio[bestComercio]) {
+        porComercio[bestComercio] = [];
+      }
+      porComercio[bestComercio].push({
+        ...item,
+        precioUnitario: minPrice,
+        subtotal
+      });
+    });
+
+    totalOptimo = Number(totalOptimo.toFixed(2));
+    const maxTotal = masCaroMonotienda ? masCaroMonotienda.total : totalOptimo;
+    const ahorroMaximo = Number((maxTotal - totalOptimo).toFixed(2));
+
+    return {
+      totalesPorComercio,
+      ganadorMonotienda,
+      masCaroMonotienda,
+      ahorroMonotienda,
+      cestaOptima: {
+        totalOptimo,
+        porComercio,
+        ahorroMaximo
+      }
+    };
+  }, [carrito, productos, comerciosList]);
+
+  // Lista filtrada y ordenada de productos para el Catálogo & Comparador
+  const sortedProductos = useMemo(() => {
+    return [...productos].filter(p => {
+      const matchesSearch = !busquedaProd || p.nombre.toLowerCase().includes(busquedaProd.toLowerCase()) || p.categoria.toLowerCase().includes(busquedaProd.toLowerCase());
+      const matchesCat = !categoriaFiltroProd || p.categoria === categoriaFiltroProd;
+      return matchesSearch && matchesCat;
+    }).sort((a, b) => {
+      let valA, valB;
+      if (sortKey === 'nombre' || sortKey === 'categoria' || sortKey === 'unidad_medida') {
+        valA = (a[sortKey] || '').toLowerCase();
+        valB = (b[sortKey] || '').toLowerCase();
+        return sortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      } else if (sortKey === 'precio_referencia_actual') {
+        valA = a.precio_referencia_actual || 0;
+        valB = b.precio_referencia_actual || 0;
+        return sortOrder === 'asc' ? valA - valB : valB - valA;
+      } else {
+        // Ordenar por precio de un supermercado concreto
+        valA = a.preciosPorComercio?.[sortKey];
+        valB = b.preciosPorComercio?.[sortKey];
+        if (valA === undefined && valB === undefined) return 0;
+        if (valA === undefined) return 1; // Poner precios ausentes al final
+        if (valB === undefined) return -1;
+        return sortOrder === 'asc' ? valA - valB : valB - valA;
+      }
+    });
+  }, [productos, busquedaProd, categoriaFiltroProd, sortKey, sortOrder]);
 
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
@@ -423,7 +749,7 @@ export default function BudgetsAndFoodView() {
         <div className="flex flex-wrap gap-2 bg-white/10 p-1.5 rounded-2xl backdrop-blur-md border border-white/10">
           <button
             onClick={() => setActiveTab('suscripciones')}
-            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'suscripciones'
                 ? 'bg-white text-slate-900 shadow-md font-extrabold'
                 : 'text-white hover:bg-white/10'
@@ -435,7 +761,7 @@ export default function BudgetsAndFoodView() {
 
           <button
             onClick={() => setActiveTab('menus')}
-            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'menus'
                 ? 'bg-white text-slate-900 shadow-md font-extrabold'
                 : 'text-white hover:bg-white/10'
@@ -446,26 +772,43 @@ export default function BudgetsAndFoodView() {
           </button>
 
           <button
+            onClick={() => setActiveTab('catalogo')}
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'catalogo'
+                ? 'bg-white text-slate-900 shadow-md font-extrabold'
+                : 'text-white hover:bg-white/10'
+            }`}
+          >
+            <Store className="w-4 h-4 text-emerald-400" />
+            <span>Catálogo & Comparador</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('cesta')}
-            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer relative ${
               activeTab === 'cesta'
                 ? 'bg-white text-slate-900 shadow-md font-extrabold'
                 : 'text-white hover:bg-white/10'
             }`}
           >
-            <ShoppingBasket className="w-4 h-4 text-emerald-500" />
-            <span>Cesta & Comercios</span>
+            <ShoppingCart className="w-4 h-4 text-indigo-400" />
+            <span>Carrito de la Compra</span>
+            {carrito.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-black bg-emerald-500 text-white shadow-sm">
+                {carrito.length}
+              </span>
+            )}
           </button>
 
           <button
             onClick={() => setActiveTab('evolucion')}
-            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'evolucion'
                 ? 'bg-white text-slate-900 shadow-md font-extrabold'
                 : 'text-white hover:bg-white/10'
             }`}
           >
-            <TrendingUp className="w-4 h-4 text-indigo-400" />
+            <TrendingUp className="w-4 h-4 text-sky-400" />
             <span>Evolución Precios</span>
           </button>
         </div>
@@ -742,9 +1085,19 @@ export default function BudgetsAndFoodView() {
                   </p>
                 </div>
 
-                <span className="px-3 py-1 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-xl text-xs font-bold">
-                  {selectedMenu.temporada_o_tipo}
-                </span>
+                <div className="flex items-center space-x-2">
+                  <span className="px-3 py-1 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-xl text-xs font-bold">
+                    {selectedMenu.temporada_o_tipo}
+                  </span>
+                  <button
+                    onClick={() => handlePasarMenuACarrito(selectedMenu)}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer"
+                    title="Transferir todos los ingredientes de este menú al Carrito de la Compra para comparar precios"
+                  >
+                    <ShoppingCart className="w-3.5 h-3.5" />
+                    <span>Pasar al Carrito</span>
+                  </button>
+                </div>
               </div>
 
               {/* 7 DÍAS INTERACTIVOS */}
@@ -831,26 +1184,35 @@ export default function BudgetsAndFoodView() {
       )}
 
       {/* ========================================================================= */}
-      {/* PESTAÑA 3: CESTA DE LA COMPRA & COMPARADOR DE COMERCIOS */}
+      {/* PESTAÑA 3: CATÁLOGO DE PRODUCTOS & COMPARADOR DE SUPERMERCADOS */}
       {/* ========================================================================= */}
-      {activeTab === 'cesta' && (
+      {activeTab === 'catalogo' && (
         <div className="space-y-6">
           
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div>
               <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center space-x-2">
                 <Store className="w-5 h-5 text-emerald-600" />
-                <span>Catálogo de Productos & Comparador de Precios</span>
+                <span>Catálogo de Productos & Comparador de Supermercados</span>
               </h2>
               <p className="text-xs text-slate-500">
-                Consulta y compara el precio de los ingredientes entre Eroski, Mercadona, Lidl y comercios locales.
+                Haz clic en cualquier columna para ordenar. Mínimo más barato destacado en verde y máximo más caro en rojo.
               </p>
             </div>
 
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+              <button
+                onClick={() => setIsAddComercioModalOpen(true)}
+                className="flex items-center space-x-1.5 px-3 py-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-bold hover:bg-indigo-100 transition-colors cursor-pointer"
+                title="Añadir nuevo supermercado a la comparativa"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Supermercado</span>
+              </button>
+
               <button
                 onClick={() => setIsPriceModalOpen(true)}
-                className="flex items-center space-x-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors"
+                className="flex items-center space-x-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors cursor-pointer"
               >
                 <DollarSign className="w-4 h-4" />
                 <span>Registrar Precio</span>
@@ -858,7 +1220,7 @@ export default function BudgetsAndFoodView() {
 
               <button
                 onClick={() => setIsProdModalOpen(true)}
-                className="flex items-center space-x-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition-transform active:scale-95"
+                className="flex items-center space-x-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition-transform active:scale-95 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>Nuevo Producto</span>
@@ -866,92 +1228,500 @@ export default function BudgetsAndFoodView() {
             </div>
           </div>
 
-          {/* TABLA COMPARATIVA DE PRODUCTOS POR COMERCIO */}
+          {/* FILTROS Y BÚSQUEDA DEL CATÁLOGO */}
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center space-x-2 w-full sm:w-auto">
+              <input
+                type="text"
+                placeholder="Buscar por nombre de producto..."
+                value={busquedaProd}
+                onChange={(e) => setBusquedaProd(e.target.value)}
+                className="w-full sm:w-72 px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              />
+              <select
+                value={categoriaFiltroProd}
+                onChange={(e) => setCategoriaFiltroProd(e.target.value)}
+                className="px-3 py-2 text-xs font-bold rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 cursor-pointer"
+              >
+                <option value="">Todas las Categorías</option>
+                {Array.from(new Set(productos.map(p => p.categoria))).filter(Boolean).map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center space-x-3 text-xs text-slate-500">
+              <span className="font-semibold">{sortedProductos.length} productos listados</span>
+              <div className="flex items-center space-x-2">
+                <span className="inline-flex items-center space-x-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-300 dark:border-emerald-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  <span>Mínimo más barato</span>
+                </span>
+                <span className="inline-flex items-center space-x-1 text-[10px] px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 font-bold border border-rose-300 dark:border-rose-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                  <span>Máximo más caro</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* TABLA COMPARATIVA DE PRODUCTOS POR COMERCIO CON ORDENACIÓN */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 uppercase font-bold border-b border-slate-200 dark:border-slate-800">
+                <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 uppercase font-bold border-b border-slate-200 dark:border-slate-800 select-none">
                   <tr>
-                    <th className="px-4 py-3.5">Producto & Categoría</th>
-                    <th className="px-4 py-3.5 text-center">Unidad</th>
-                    <th className="px-4 py-3.5 text-right font-extrabold text-indigo-600 dark:text-indigo-400">Precio Ref.</th>
-                    <th className="px-4 py-3.5 text-right">Eroski</th>
-                    <th className="px-4 py-3.5 text-right">Mercadona</th>
-                    <th className="px-4 py-3.5 text-right">Lidl</th>
-                    <th className="px-4 py-3.5 text-right">Comercio Local</th>
-                    <th className="px-4 py-3.5 text-center">Acción</th>
+                    <th 
+                      onClick={() => handleSort('nombre')}
+                      className="px-4 py-3.5 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group"
+                      title="Ordenar por Nombre de Producto"
+                    >
+                      <div className="flex items-center space-x-1">
+                        <span>Producto & Categoría</span>
+                        {sortKey === 'nombre' && (sortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-emerald-600" /> : <ArrowDown className="w-3 h-3 text-emerald-600" />)}
+                      </div>
+                    </th>
+                    <th 
+                      onClick={() => handleSort('unidad_medida')}
+                      className="px-3 py-3.5 text-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group"
+                      title="Ordenar por Unidad"
+                    >
+                      <div className="flex items-center justify-center space-x-1">
+                        <span>Unidad</span>
+                        {sortKey === 'unidad_medida' && (sortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-emerald-600" /> : <ArrowDown className="w-3 h-3 text-emerald-600" />)}
+                      </div>
+                    </th>
+                    <th 
+                      onClick={() => handleSort('precio_referencia_actual')}
+                      className="px-3 py-3.5 text-right font-extrabold text-indigo-600 dark:text-indigo-400 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group"
+                      title="Ordenar por Precio Referencia"
+                    >
+                      <div className="flex items-center justify-end space-x-1">
+                        <span>Precio Ref.</span>
+                        {sortKey === 'precio_referencia_actual' && (sortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-600" /> : <ArrowDown className="w-3 h-3 text-indigo-600" />)}
+                      </div>
+                    </th>
+
+                    {/* Columnas Dinámicas de Supermercados */}
+                    {comerciosList.map(comercio => (
+                      <th 
+                        key={comercio}
+                        onClick={() => handleSort(comercio)}
+                        className="px-3 py-3.5 text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group"
+                        title={`Ordenar por precio en ${comercio}`}
+                      >
+                        <div className="flex items-center justify-end space-x-1">
+                          <span>{comercio}</span>
+                          {sortKey === comercio && (sortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-emerald-600" /> : <ArrowDown className="w-3 h-3 text-emerald-600" />)}
+                        </div>
+                      </th>
+                    ))}
+
+                    <th className="px-4 py-3.5 text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
-                  {productos.map(p => {
-                    const pEroski = p.preciosPorComercio?.['Eroski'];
-                    const pMercadona = p.preciosPorComercio?.['Mercadona'];
-                    const pLidl = p.preciosPorComercio?.['Lidl'];
-                    const pLocal = p.preciosPorComercio?.['Carnicería Local'] || p.preciosPorComercio?.['Frutería Local'] || p.preciosPorComercio?.['Panadería Local'];
+                  {sortedProductos.length === 0 ? (
+                    <tr>
+                      <td colSpan={comerciosList.length + 4} className="text-center py-10 text-slate-400 text-xs">
+                        No se encontraron productos que coincidan con la búsqueda.
+                      </td>
+                    </tr>
+                  ) : (
+                    sortedProductos.map(p => {
+                      // Calcular min y max entre comercios disponibles
+                      const availablePrices = comerciosList
+                        .map(c => p.preciosPorComercio?.[c])
+                        .filter(v => typeof v === 'number' && v > 0);
+                      
+                      const minPrice = availablePrices.length >= 2 ? Math.min(...availablePrices) : null;
+                      const maxPrice = availablePrices.length >= 2 ? Math.max(...availablePrices) : null;
 
-                    // Determinar el mínimo disponible
-                    const available = [pEroski, pMercadona, pLidl, pLocal].filter(v => typeof v === 'number');
-                    const minPrice = available.length > 0 ? Math.min(...available) : null;
+                      return (
+                        <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="font-bold text-slate-900 dark:text-white">{p.nombre}</div>
+                            <span className="text-[10px] text-slate-400">{p.categoria}</span>
+                          </td>
+                          <td className="px-3 py-3 text-center text-slate-500 font-mono">
+                            {p.unidad_medida}
+                          </td>
+                          <td className="px-3 py-3 text-right font-black text-indigo-600 dark:text-indigo-400 text-sm">
+                            {formatCurrency(p.precio_referencia_actual)}
+                          </td>
 
-                    return (
-                      <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                        <td className="px-4 py-3">
-                          <div className="font-bold text-slate-900 dark:text-white">{p.nombre}</div>
-                          <span className="text-[10px] text-slate-400">{p.categoria}</span>
-                        </td>
-                        <td className="px-4 py-3 text-center text-slate-500 font-mono">
-                          {p.unidad_medida}
-                        </td>
-                        <td className="px-4 py-3 text-right font-black text-indigo-600 dark:text-indigo-400 text-sm">
-                          {formatCurrency(p.precio_referencia_actual)}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {pEroski ? (
-                            <span className={`font-bold ${pEroski === minPrice ? 'text-emerald-600 dark:text-emerald-400 font-black' : 'text-slate-700 dark:text-slate-300'}`}>
-                              {formatCurrency(pEroski)}
-                            </span>
-                          ) : <span className="text-slate-300 dark:text-slate-600">-</span>}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {pMercadona ? (
-                            <span className={`font-bold ${pMercadona === minPrice ? 'text-emerald-600 dark:text-emerald-400 font-black' : 'text-slate-700 dark:text-slate-300'}`}>
-                              {formatCurrency(pMercadona)}
-                            </span>
-                          ) : <span className="text-slate-300 dark:text-slate-600">-</span>}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {pLidl ? (
-                            <span className={`font-bold ${pLidl === minPrice ? 'text-emerald-600 dark:text-emerald-400 font-black' : 'text-slate-700 dark:text-slate-300'}`}>
-                              {formatCurrency(pLidl)}
-                            </span>
-                          ) : <span className="text-slate-300 dark:text-slate-600">-</span>}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {pLocal ? (
-                            <span className={`font-bold ${pLocal === minPrice ? 'text-emerald-600 dark:text-emerald-400 font-black' : 'text-slate-700 dark:text-slate-300'}`}>
-                              {formatCurrency(pLocal)}
-                            </span>
-                          ) : <span className="text-slate-300 dark:text-slate-600">-</span>}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <button
-                            onClick={() => {
-                              setSelectedProductoGrafica(p.id);
-                              setActiveTab('evolucion');
-                            }}
-                            className="p-1.5 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg transition-colors font-bold text-[11px] flex items-center space-x-1 mx-auto"
-                          >
-                            <TrendingUp className="w-3.5 h-3.5" />
-                            <span>Ver Histórico</span>
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          {/* Precios de cada Supermercado con Resaltado Mínimo / Máximo */}
+                          {comerciosList.map(comercio => {
+                            const val = p.preciosPorComercio?.[comercio];
+                            const isMin = minPrice !== null && val === minPrice;
+                            const isMax = maxPrice !== null && val === maxPrice && maxPrice > minPrice;
+
+                            return (
+                              <td key={comercio} className="px-3 py-3 text-right whitespace-nowrap">
+                                {typeof val === 'number' && val > 0 ? (
+                                  <span className={`inline-block px-1.5 py-0.5 rounded-lg text-xs transition-all ${
+                                    isMin
+                                      ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-black border border-emerald-300 dark:border-emerald-700 shadow-2xs'
+                                      : isMax
+                                      ? 'bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 font-bold border border-rose-300 dark:border-rose-800'
+                                      : 'text-slate-700 dark:text-slate-300 font-semibold'
+                                  }`}>
+                                    {formatCurrency(val)}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300 dark:text-slate-600 font-mono">-</span>
+                                )}
+                              </td>
+                            );
+                          })}
+
+                          {/* Acciones: Añadir a Cesta + Ver Histórico */}
+                          <td className="px-4 py-3 text-center whitespace-nowrap">
+                            <div className="flex items-center justify-center space-x-1.5">
+                              <button
+                                onClick={() => handleAgregarProductoACarrito(p, 1)}
+                                className="px-2.5 py-1 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs font-bold transition-all flex items-center space-x-1 cursor-pointer"
+                                title="Añadir a la Cesta de la Compra"
+                              >
+                                <Plus className="w-3 h-3" />
+                                <ShoppingCart className="w-3.5 h-3.5" />
+                              </button>
+                              
+                              <button
+                                onClick={() => {
+                                  setSelectedProductoGrafica(p.id);
+                                  setActiveTab('evolucion');
+                                }}
+                                className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg transition-colors font-bold text-[11px]"
+                                title="Ver Gráfica Histórica e Inflación"
+                              >
+                                <TrendingUp className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* PESTAÑA 4: CARRITO DE LA COMPRA INTELIGENTE & RUTA ÓPTIMA */}
+      {/* ========================================================================= */}
+      {activeTab === 'cesta' && (
+        <div className="space-y-6 animate-fadeIn">
+          
+          {carrito.length === 0 ? (
+            <div className="bg-white dark:bg-slate-900 p-12 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm text-center space-y-4">
+              <div className="w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
+                <ShoppingCart className="w-8 h-8" />
+              </div>
+              <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                Tu Carrito de la Compra está vacío
+              </h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Puedes transferir todos los ingredientes de un menú semanal con un solo clic o añadir artículos directamente desde el catálogo de productos.
+              </p>
+              <div className="flex items-center justify-center space-x-3 pt-2">
+                <button
+                  onClick={() => setActiveTab('menus')}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-amber-600/20 cursor-pointer"
+                >
+                  Ir a Menús & Recetas
+                </button>
+                <button
+                  onClick={() => setActiveTab('catalogo')}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-600/20 cursor-pointer"
+                >
+                  Explorar Catálogo
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              
+              {/* KPIS PRINCIPALES DE LA CESTA */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                
+                {/* GANADOR MONOTIENDA */}
+                <div className="bg-gradient-to-br from-emerald-500 to-teal-700 p-5 rounded-3xl text-white shadow-lg space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-100">
+                      🏆 Supermercado Más Barato
+                    </span>
+                    <Award className="w-5 h-5 text-amber-300" />
+                  </div>
+                  <div className="flex items-baseline space-x-2">
+                    <h3 className="text-2xl font-black">{analisisCarrito.ganadorMonotienda?.comercio || 'Eroski'}</h3>
+                    <span className="text-lg font-bold text-emerald-100">
+                      {formatCurrency(analisisCarrito.ganadorMonotienda?.total || 0)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-emerald-100 leading-tight">
+                    Ahorro de <strong>{formatCurrency(analisisCarrito.ahorroMonotienda)}</strong> si compras toda la cesta en {analisisCarrito.ganadorMonotienda?.comercio} en lugar de la tienda más cara.
+                  </p>
+                </div>
+
+                {/* CESTA ÓPTIMA COMBINADA */}
+                <div className="bg-gradient-to-br from-indigo-600 to-purple-800 p-5 rounded-3xl text-white shadow-lg space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-200">
+                      ⚡ Cesta Óptima Multitienda
+                    </span>
+                    <Sparkles className="w-5 h-5 text-indigo-200" />
+                  </div>
+                  <div className="flex items-baseline space-x-2">
+                    <h3 className="text-2xl font-black">
+                      {formatCurrency(analisisCarrito.cestaOptima.totalOptimo)}
+                    </h3>
+                    <span className="text-xs font-bold bg-white/20 px-2 py-0.5 rounded-full">
+                      Mejor Precio Absoluto
+                    </span>
+                  </div>
+                  <p className="text-xs text-indigo-100 leading-tight">
+                    Ahorro máximo de <strong>{formatCurrency(analisisCarrito.cestaOptima.ahorroMaximo)}</strong> comprando cada producto en su supermercado más barato.
+                  </p>
+                </div>
+
+                {/* ACCIONES Y RESUMEN */}
+                <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-slate-500 uppercase">Artículos en Cesta</span>
+                    <div className="flex items-baseline space-x-2 mt-1">
+                      <span className="text-2xl font-black text-slate-900 dark:text-white">{carrito.length}</span>
+                      <span className="text-xs text-slate-400 font-semibold">
+                        ({carrito.filter(i => i.comprado).length} marcados como comprados)
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2 pt-3">
+                    <button
+                      onClick={() => handleCopiarLista(analisisCarrito.cestaOptima)}
+                      className="flex-1 flex items-center justify-center space-x-1.5 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-bold border border-indigo-200 dark:border-indigo-800 transition-colors cursor-pointer"
+                      title="Copiar lista organizada con precios para WhatsApp"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copiar Lista</span>
+                    </button>
+                    <button
+                      onClick={handleVaciarCarrito}
+                      className="p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl border border-rose-200 dark:border-rose-900/50 transition-colors cursor-pointer"
+                      title="Vaciar toda la cesta de la compra"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* COMPARATIVA DE PRECIOS POR SUPERMERCADO */}
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <div>
+                    <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center space-x-2">
+                      <Store className="w-5 h-5 text-indigo-600" />
+                      <span>Comparativa de Coste de la Cesta por Supermercado</span>
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Importe total que pagarías si realizas toda la compra en un único establecimiento.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                  {Object.values(analisisCarrito.totalesPorComercio).sort((a, b) => a.total - b.total).map((item, idx) => {
+                    const isWinner = idx === 0;
+                    const isMasCaro = idx === Object.keys(analisisCarrito.totalesPorComercio).length - 1;
+
+                    return (
+                      <div 
+                        key={item.comercio}
+                        className={`p-3.5 rounded-2xl border text-center space-y-1 transition-all ${
+                          isWinner 
+                            ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700 shadow-sm ring-1 ring-emerald-500/20' 
+                            : isMasCaro
+                            ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/60'
+                            : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        <span className="text-[10px] font-black uppercase text-slate-500 block truncate">
+                          {item.comercio}
+                        </span>
+                        <div className="text-base font-black text-slate-900 dark:text-white">
+                          {formatCurrency(item.total)}
+                        </div>
+                        {isWinner && (
+                          <span className="inline-block text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-500 text-white shadow-2xs">
+                            🏆 Más Barato
+                          </span>
+                        )}
+                        {isMasCaro && (
+                          <span className="inline-block text-[9px] font-bold px-2 py-0.5 rounded-full bg-rose-200 dark:bg-rose-900 text-rose-800 dark:text-rose-200">
+                            🔴 Más Caro
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* RUTA ÓPTIMA: «DÓNDE COMPRAR CADA COSA» */}
+              <div className="bg-indigo-50/40 dark:bg-indigo-950/20 p-6 rounded-3xl border border-indigo-200 dark:border-indigo-800/60 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-100 dark:border-indigo-900/40 pb-3">
+                  <div>
+                    <h3 className="text-base font-black text-indigo-950 dark:text-indigo-200 flex items-center space-x-2">
+                      <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                      <span>Dónde Comprar Cada Cosa para Máximo Ahorro</span>
+                    </h3>
+                    <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80">
+                      Ruta inteligente de compra con el mejor precio disponible para cada artículo de tu lista.
+                    </p>
+                  </div>
+                  <span className="text-xs font-black px-3 py-1 bg-indigo-600 text-white rounded-xl shadow-xs self-start sm:self-auto">
+                    Total Óptimo: {formatCurrency(analisisCarrito.cestaOptima.totalOptimo)}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Object.entries(analisisCarrito.cestaOptima.porComercio).map(([comercio, items]) => {
+                    const subtotalComercio = items.reduce((acc, it) => acc + it.subtotal, 0);
+
+                    return (
+                      <div key={comercio} className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-indigo-100 dark:border-indigo-900/40 shadow-xs space-y-3">
+                        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                          <span className="font-extrabold text-xs text-slate-900 dark:text-white uppercase flex items-center space-x-1.5">
+                            <span>🏪 {comercio}</span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">
+                              {items.length}
+                            </span>
+                          </span>
+                          <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">
+                            {formatCurrency(subtotalComercio)}
+                          </span>
+                        </div>
+
+                        <div className="space-y-1.5 text-xs">
+                          {items.map(it => (
+                            <div key={it.id} className="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                              <span className="truncate pr-2 font-medium">
+                                • {it.nombre} <span className="text-[10px] text-slate-400">({it.cantidad} {it.unidad_medida})</span>
+                              </span>
+                              <span className="font-bold whitespace-nowrap text-slate-900 dark:text-white">
+                                {formatCurrency(it.subtotal)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* LISTA / CHECKLIST INTERACTIVO DE LA COMPRA */}
+              <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center space-x-2">
+                      <CheckSquare className="w-5 h-5 text-emerald-600" />
+                      <span>Checklist de Artículos del Carrito</span>
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Marca lo que ya has comprado en tienda y ajusta cantidades con facilidad.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {carrito.map(item => {
+                    const prod = productos.find(p => p.id === item.producto_id);
+                    const precioRef = prod?.precio_referencia_actual || 1.0;
+                    const subtotal = Number((precioRef * (item.cantidad || 1)).toFixed(2));
+
+                    return (
+                      <div 
+                        key={item.id} 
+                        className={`p-4 flex items-center justify-between transition-colors ${
+                          item.comprado ? 'bg-slate-50/80 dark:bg-slate-800/20 opacity-60' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleComprado(item.id)}
+                            className="text-slate-400 hover:text-emerald-600 transition-colors cursor-pointer"
+                          >
+                            {item.comprado ? (
+                              <CheckSquare className="w-5 h-5 text-emerald-600" />
+                            ) : (
+                              <Square className="w-5 h-5" />
+                            )}
+                          </button>
+
+                          <div>
+                            <span className={`font-bold text-xs ${item.comprado ? 'line-through text-slate-400' : 'text-slate-900 dark:text-white'}`}>
+                              {item.nombre}
+                            </span>
+                            <div className="flex items-center space-x-2 text-[10px] text-slate-400">
+                              <span>{item.categoria}</span>
+                              <span>•</span>
+                              <span>Ref: {formatCurrency(precioRef)}/{item.unidad_medida}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* CONTROLES DE CANTIDAD Y SUBTOTAL */}
+                        <div className="flex items-center space-x-4">
+                          <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateCantidadCarrito(item.id, -1)}
+                              className="w-6 h-6 flex items-center justify-center rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-white font-bold hover:bg-slate-200 transition-colors cursor-pointer"
+                            >
+                              -
+                            </button>
+                            <span className="px-2 text-xs font-black text-slate-800 dark:text-slate-200 font-mono">
+                              {item.cantidad} {item.unidad_medida}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateCantidadCarrito(item.id, 1)}
+                              className="w-6 h-6 flex items-center justify-center rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-white font-bold hover:bg-slate-200 transition-colors cursor-pointer"
+                            >
+                              +
+                            </button>
+                          </div>
+
+                          <span className="text-xs font-black text-slate-900 dark:text-white w-16 text-right font-mono">
+                            {formatCurrency(subtotal)}
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => handleEliminarItemCarrito(item.id)}
+                            className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                            title="Quitar artículo"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+            </div>
+          )}
+
         </div>
       )}
 
@@ -1643,6 +2413,64 @@ export default function BudgetsAndFoodView() {
                   className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md shadow-indigo-600/30"
                 >
                   Añadir Persona
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL AÑADIR SUPERMERCADO */}
+      {/* ========================================================================= */}
+      {isAddComercioModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center space-x-2">
+                <Store className="w-5 h-5 text-indigo-600" />
+                <span>Añadir Supermercado</span>
+              </h3>
+              <button
+                onClick={() => setIsAddComercioModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddComercio} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Nombre del Supermercado / Tienda *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej: BM, DIA, ALDI, Carrefour, Alcampo..."
+                  value={newComercioName}
+                  onChange={(e) => setNewComercioName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  autoFocus
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Se añadirá una nueva columna en el comparador de precios y en el análisis del carrito.
+                </p>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAddComercioModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md shadow-indigo-600/30 cursor-pointer"
+                >
+                  Añadir Supermercado
                 </button>
               </div>
             </form>

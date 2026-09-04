@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ArrowRightLeft, ArrowDownRight, ArrowUpRight, Check, AlertCircle, Landmark, Repeat, CalendarDays, Layers, Sparkles } from 'lucide-react';
+import { X, ArrowRightLeft, ArrowDownRight, ArrowUpRight, Check, AlertCircle, Landmark, Repeat, CalendarDays, Layers, Sparkles, TrendingUp } from 'lucide-react';
 import { api } from '../services/api';
 
 export default function QuickTransactionModal({ isOpen, onClose, onTransactionCreated, cuentas, categorias, pasivos = [] }) {
@@ -107,7 +107,7 @@ export default function QuickTransactionModal({ isOpen, onClose, onTransactionCr
         concepto: concepto.trim() || (isTransfer ? 'Traspaso interno' : (subcategoria || 'Gasto')),
         importe: finalImporte,
         es_transferencia_interna: isTransfer,
-        cuenta_destino_id: isTransfer ? Number(cuentaDestinoId) : null,
+        cuenta_destino_id: cuentaDestinoId ? Number(cuentaDestinoId) : null,
         pasivo_id: pasivoId ? Number(pasivoId) : null,
         es_consolidado: Number(esConsolidado),
         etiqueta_especial: etiquetaEspecial.trim() || null,
@@ -413,7 +413,47 @@ export default function QuickTransactionModal({ isOpen, onClose, onTransactionCr
             </div>
           )}
 
-          {/* Serie Repetitiva / Recurrencias */}
+          {/* Vincular con Fondo / Plan de Pensiones / EPSV / Inversión */}
+          {tipoMov !== 'transferencia' && (
+            <div className="p-3.5 rounded-2xl border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50/40 dark:bg-emerald-950/20 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-emerald-950 dark:text-emerald-200 flex items-center space-x-1.5">
+                  <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Vincular con Fondo de Pensiones / EPSV / Inversión</span>
+                </label>
+                {cuentaDestinoId && (
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                    esConsolidado === 1 
+                      ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300' 
+                      : 'bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300'
+                  }`}>
+                    {esConsolidado === 1 ? '🟢 Suma a Patrimonio' : '🟡 Previsión Aportación'}
+                  </span>
+                )}
+              </div>
+              <select
+                value={cuentaDestinoId}
+                onChange={(e) => setCuentaDestinoId(e.target.value)}
+                className="w-full px-3 py-2 text-xs font-semibold rounded-xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none cursor-pointer"
+              >
+                <option value="" className="dark:bg-slate-900">-- Ninguno (Gasto general / Sin destino patrimonial) --</option>
+                {cuentas.filter(c => c.id !== Number(cuentaId)).map(c => (
+                  <option key={c.id} value={c.id} className="dark:bg-slate-900">
+                    📈 {c.nombre} ({c.tipo === 'epsv' ? 'Plan de Pensiones / EPSV' : c.tipo === 'inversion' ? 'Inversión / Cartera' : c.tipo})
+                  </option>
+                ))}
+              </select>
+              {cuentaDestinoId && (
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
+                  {esConsolidado === 1 
+                    ? '💡 Al estar CONSOLIDADO, esta aportación incrementa el saldo patrimonial de este fondo/EPSV.'
+                    : '⏳ Al estar en PREVISIÓN, no altera el saldo hasta que se marque como Consolidado.'}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Serie Repetitiva / Recurrencias (Gastos Tipo 2) */}
           <div className={`p-3.5 rounded-2xl border transition-all space-y-3 ${
             esSerie 
               ? 'border-purple-200 dark:border-purple-800/80 bg-purple-50/40 dark:bg-purple-950/20 shadow-sm' 
@@ -426,10 +466,15 @@ export default function QuickTransactionModal({ isOpen, onClose, onTransactionCr
                 onChange={(e) => setEsSerie(e.target.checked)}
                 className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300 dark:border-slate-700 cursor-pointer"
               />
-              <span className="flex items-center space-x-1.5 text-xs font-bold text-slate-900 dark:text-white">
-                <Repeat className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                <span>Crear como Serie Repetitiva / Periódica</span>
-              </span>
+              <div>
+                <span className="flex items-center space-x-1.5 text-xs font-bold text-slate-900 dark:text-white">
+                  <Repeat className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                  <span>Crear como Serie Repetitiva / Periódica</span>
+                </span>
+                <span className="text-[10px] text-purple-700 dark:text-purple-300 font-semibold block">
+                  🏷️ Gasto Tipo 2 (Fijo / Recurrente según modelo Excel)
+                </span>
+              </div>
             </label>
 
             {esSerie && (

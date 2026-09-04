@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ArrowRightLeft, ArrowDownRight, ArrowUpRight, Check, AlertCircle, Trash2, CheckCircle2, Clock, Landmark, Repeat, Calendar, CalendarDays, Sparkles, Layers, RefreshCw } from 'lucide-react';
+import { X, ArrowRightLeft, ArrowDownRight, ArrowUpRight, Check, AlertCircle, Trash2, CheckCircle2, Clock, Landmark, Repeat, Calendar, CalendarDays, Sparkles, Layers, RefreshCw, TrendingUp } from 'lucide-react';
 import { api } from '../services/api';
 import { useToast } from '../context/ToastContext';
 
@@ -87,6 +87,28 @@ export default function EditTransactionModal({ isOpen, onClose, movimiento, onTr
           }
         }
       }).catch(console.error);
+
+      // Auto-detectar Fondo de Pensiones / EPSV si coincide en el concepto
+      if (movimiento.cuenta_destino_id) {
+        setCuentaDestinoId(String(movimiento.cuenta_destino_id));
+      } else if (cuentas && cuentas.length > 0) {
+        const textMatch = `${movimiento.concepto || ''} ${movimiento.etiqueta_especial || ''} ${movimiento.subcategoria || ''}`.toLowerCase();
+        const matchedCuenta = cuentas.find(c => {
+          const cNom = c.nombre.toLowerCase();
+          if (c.tipo === 'epsv' || c.tipo === 'inversion' || cNom.includes('epsv') || cNom.includes('indexa') || cNom.includes('fondo')) {
+            if (textMatch.includes('yug') && (cNom.includes('yolanda') || cNom.includes('yug'))) return true;
+            if (textMatch.includes('jbn') && (cNom.includes('julio') || cNom.includes('jbn'))) return true;
+            if (textMatch.includes('julio') && cNom.includes('julio')) return true;
+            if (textMatch.includes('yolanda') && cNom.includes('yolanda')) return true;
+            if (textMatch.includes('indexa') && cNom.includes('indexa')) return true;
+            if (textMatch.includes(cNom) || cNom.includes(textMatch)) return true;
+          }
+          return false;
+        });
+        if (matchedCuenta) {
+          setCuentaDestinoId(String(matchedCuenta.id));
+        }
+      }
     }
   }, [isOpen, movimiento, cuentas, categorias]);
 
@@ -128,7 +150,7 @@ export default function EditTransactionModal({ isOpen, onClose, movimiento, onTr
         concepto: concepto.trim() || (isTransfer ? 'Traspaso interno' : (subcategoria || 'Gasto')),
         importe: finalImporte,
         es_transferencia_interna: isTransfer,
-        cuenta_destino_id: isTransfer ? Number(cuentaDestinoId) : null,
+        cuenta_destino_id: cuentaDestinoId ? Number(cuentaDestinoId) : null,
         es_consolidado: Number(esConsolidado),
         etiqueta_especial: etiquetaEspecial.trim() || null,
         notas: notas.trim() || null,
@@ -493,7 +515,47 @@ export default function EditTransactionModal({ isOpen, onClose, movimiento, onTr
             </div>
           )}
 
-          {/* Serie Repetitiva / Recurrencias */}
+          {/* Vincular con Fondo / Plan de Pensiones / EPSV / Inversión */}
+          {tipoMov !== 'transferencia' && (
+            <div className="p-3.5 rounded-2xl border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50/40 dark:bg-emerald-950/20 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-emerald-950 dark:text-emerald-200 flex items-center space-x-1.5">
+                  <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Vincular con Fondo de Pensiones / EPSV / Inversión</span>
+                </label>
+                {cuentaDestinoId && (
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                    esConsolidado === 1 
+                      ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300' 
+                      : 'bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300'
+                  }`}>
+                    {esConsolidado === 1 ? '🟢 Suma a Patrimonio' : '🟡 Previsión Aportación'}
+                  </span>
+                )}
+              </div>
+              <select
+                value={cuentaDestinoId}
+                onChange={(e) => setCuentaDestinoId(e.target.value)}
+                className="w-full px-3 py-2 text-xs font-semibold rounded-xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none cursor-pointer"
+              >
+                <option value="" className="dark:bg-slate-900">-- Ninguno (Gasto general / Sin destino patrimonial) --</option>
+                {cuentas.filter(c => c.id !== Number(cuentaId)).map(c => (
+                  <option key={c.id} value={c.id} className="dark:bg-slate-900">
+                    📈 {c.nombre} ({c.tipo === 'epsv' ? 'Plan de Pensiones / EPSV' : c.tipo === 'inversion' ? 'Inversión / Cartera' : c.tipo})
+                  </option>
+                ))}
+              </select>
+              {cuentaDestinoId && (
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
+                  {esConsolidado === 1 
+                    ? '💡 Al estar CONSOLIDADO, esta aportación incrementa el saldo patrimonial de este fondo/EPSV.'
+                    : '⏳ Al estar en PREVISIÓN, no altera el saldo hasta que se marque como Consolidado.'}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Serie Repetitiva / Recurrencias (Gastos Tipo 2) */}
           <div className={`p-3.5 rounded-2xl border transition-all space-y-3 ${
             esSerie 
               ? 'border-purple-200 dark:border-purple-800/80 bg-purple-50/40 dark:bg-purple-950/20 shadow-sm' 
@@ -510,10 +572,15 @@ export default function EditTransactionModal({ isOpen, onClose, movimiento, onTr
                   }}
                   className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300 dark:border-slate-700 cursor-pointer"
                 />
-                <span className="flex items-center space-x-1.5 text-xs font-bold text-slate-900 dark:text-white">
-                  <Repeat className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                  <span>Serie Repetitiva / Periódica</span>
-                </span>
+                <div>
+                  <span className="flex items-center space-x-1.5 text-xs font-bold text-slate-900 dark:text-white">
+                    <Repeat className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                    <span>Serie Repetitiva / Periódica</span>
+                  </span>
+                  <span className="text-[10px] text-purple-700 dark:text-purple-300 font-semibold block">
+                    🏷️ Gasto Tipo 2 (Fijo / Recurrente según modelo Excel)
+                  </span>
+                </div>
               </label>
 
               {movimiento.serie_id && (
