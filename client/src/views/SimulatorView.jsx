@@ -44,7 +44,9 @@ import {
   Activity,
   ArrowUpRight,
   Save,
-  Wand2
+  Wand2,
+  Zap,
+  Wallet
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -111,6 +113,15 @@ export default function SimulatorView() {
   const [regimenFiscal, setRegimenFiscal] = useState('pais_vasco'); // 'pais_vasco' | 'general'
   const [escenarioResult, setEscenarioResult] = useState(null);
 
+  // Cuentas y Modal de Aplicación Real de Amortización Anticipada
+  const [cuentas, setCuentas] = useState([]);
+  const [isAmortModalOpen, setIsAmortModalOpen] = useState(false);
+  const [amortForm, setAmortForm] = useState({
+    cuentaId: '',
+    fecha: new Date().toISOString().split('T')[0],
+    notas: ''
+  });
+
   // ========================================================
   // ESTADO UNIFICADO: DISEÑADOR & SIMULADOR INTEGRAL DE PASIVOS
   // ========================================================
@@ -143,8 +154,12 @@ export default function SimulatorView() {
   const loadPasivos = async () => {
     try {
       setLoading(true);
-      const res = await api.getPasivos();
+      const [res, cList] = await Promise.all([
+        api.getPasivos(),
+        api.getCuentas().catch(() => [])
+      ]);
       setPasivos(res);
+      setCuentas(cList || []);
       if (res.length > 0) {
         if (!selectedPasivoId || !res.some(p => p.id === Number(selectedPasivoId))) {
           setSelectedPasivoId(res[0].id);
@@ -153,6 +168,28 @@ export default function SimulatorView() {
       }
     } catch (err) {
       console.error('Error cargando pasivos:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirmAmortizacion = async () => {
+    if (!currentSelectedPasivo || amortizacionExtra <= 0) return;
+    try {
+      setLoading(true);
+      const res = await api.registrarAmortizacionAnticipada(currentSelectedPasivo.id, {
+        cuentaId: amortForm.cuentaId || cuentas[0]?.id,
+        importe: amortizacionExtra,
+        fecha: amortForm.fecha,
+        modalidad: modalidadAmort,
+        nuevaCuota: modalidadAmort === 'reducir_cuota' ? (escenarioResult?.simulado?.cuotaMensual || null) : null,
+        notas: amortForm.notas
+      });
+      setIsAmortModalOpen(false);
+      toast.success(res.message || 'Amortización registrada con éxito y descontada de la cuenta', 'Amortización Anticipada');
+      await loadPasivos();
+    } catch (err) {
+      toast.error(err.message || 'Error registrando amortización', 'Error');
     } finally {
       setLoading(false);
     }
@@ -849,6 +886,11 @@ export default function SimulatorView() {
   const currentProgresoPct = (currentSelectedPasivo && Number(currentSelectedPasivo.capital_inicial) > 0)
     ? Number(((currentAmortizado / currentSelectedPasivo.capital_inicial) * 100).toFixed(1))
     : (currentSelectedPasivo?.progresoAmortizadoPct || 0);
+
+  // Cuotas anuales base y cálculo óptimo para deducción en IRPF (País Vasco y Estatal)
+  const cuotasAnualesBase = Math.round((Number(currentSelectedPasivo?.cuota_mensual) || 0) * 12);
+  const topeOptimoPV = Math.max(0, 8500 - cuotasAnualesBase);
+  const topeOptimoEstatal = Math.max(0, 9040 - cuotasAnualesBase);
 
   const chartDataAmort = [];
   if (escenarioResult && escenarioResult.original && escenarioResult.simulado) {
@@ -2186,18 +2228,45 @@ export default function SimulatorView() {
                       onChange={(e) => setAmortizacionExtra(Math.max(0, parseFloat(e.target.value) || 0))}
                       className="w-full px-3 py-2 text-sm font-bold rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                     />
-                    <div className="flex flex-wrap gap-1 pt-1">
-                      {[1000, 3000, 5000, 8500, 9040].map(amt => (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {[1000, 3000, 5000].map(amt => (
                         <button
                           key={amt}
                           type="button"
                           onClick={() => setAmortizacionExtra(amt)}
-                          className="px-2 py-0.5 text-[11px] font-semibold rounded bg-slate-200 dark:bg-slate-700 hover:bg-indigo-100 hover:text-indigo-600 transition-colors"
+                          className="px-2 py-0.5 text-[11px] font-semibold rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-indigo-100 hover:text-indigo-600 transition-colors"
                         >
-                          {amt === 8500 ? '8.500€ (PV)' : amt === 9040 ? '9.040€ (Estatal)' : `${amt}€`}
+                          {amt.toLocaleString('es-ES')} €
                         </button>
                       ))}
+
+                      {topeOptimoPV > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setAmortizacionExtra(topeOptimoPV)}
+                          className="px-2.5 py-0.5 text-[11px] font-bold rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 hover:bg-amber-200 border border-amber-300 dark:border-amber-700 transition-colors"
+                          title={`Tope PV: 8.500 € menos ${cuotasAnualesBase.toLocaleString('es-ES')} € de cuotas anuales = ${topeOptimoPV.toLocaleString('es-ES')} €`}
+                        >
+                          🎯 Tope PV ({topeOptimoPV.toLocaleString('es-ES')} €)
+                        </button>
+                      )}
+
+                      {topeOptimoEstatal > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setAmortizacionExtra(topeOptimoEstatal)}
+                          className="px-2.5 py-0.5 text-[11px] font-bold rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-300 transition-colors"
+                          title={`Tope Estatal: 9.040 € menos ${cuotasAnualesBase.toLocaleString('es-ES')} € de cuotas anuales = ${topeOptimoEstatal.toLocaleString('es-ES')} €`}
+                        >
+                          🎯 Tope Estatal ({topeOptimoEstatal.toLocaleString('es-ES')} €)
+                        </button>
+                      )}
                     </div>
+                    {cuotasAnualesBase > 0 && (
+                      <p className="text-[10px] text-slate-400">
+                        * Los botones de Tope IRPF ya descuentan tus {formatCurrency(cuotasAnualesBase)} de cuotas anuales ordinarias.
+                      </p>
+                    )}
                   </div>
 
                   {/* 2. Modalidad: Reducir Plazo vs Cuota */}
@@ -2292,60 +2361,94 @@ export default function SimulatorView() {
 
           {/* Resultados del Escenario Simulado */}
           {escenarioResult && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-fadeIn">
-              
-              {/* Ahorro de Intereses */}
-              <div className="p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50">
-                <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Ahorro Total en Intereses</span>
-                <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
-                  +{formatCurrency(escenarioResult.simulado.ahorroIntereses)}
-                </p>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Total intereses nuevos: {formatCurrency(escenarioResult.simulado.totalIntereses)} (antes {formatCurrency(escenarioResult.original.totalIntereses)})
-                </p>
+            <div className="space-y-4 animate-fadeIn">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                
+                {/* Ahorro de Intereses */}
+                <div className="p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50">
+                  <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Ahorro Total en Intereses</span>
+                  <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+                    +{formatCurrency(escenarioResult.simulado.ahorroIntereses)}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Total intereses nuevos: {formatCurrency(escenarioResult.simulado.totalIntereses)} (antes {formatCurrency(escenarioResult.original.totalIntereses)})
+                  </p>
+                </div>
+
+                {/* Impacto en Tiempo o Cuota */}
+                <div className="p-5 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/50">
+                  <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+                    {modalidadAmort === 'reducir_plazo' ? 'Tiempo Adelantado' : 'Nueva Cuota Mensual'}
+                  </span>
+                  <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
+                    {modalidadAmort === 'reducir_plazo' 
+                      ? `-${escenarioResult.simulado.mesesAhorrados} meses (${escenarioResult.simulado.anosAhorrados} años)` 
+                      : formatCurrency(escenarioResult.simulado.cuotaMensual)}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    {modalidadAmort === 'reducir_plazo' 
+                      ? `Finaliza en ${escenarioResult.simulado.mesesRestantes} meses en vez de ${escenarioResult.original.mesesRestantes}` 
+                      : `Ahorro mensual de +${formatCurrency(escenarioResult.simulado.ahorroCuotaMensual)}/mes`}
+                  </p>
+                </div>
+
+                {/* Devolución Hacienda IRPF */}
+                <div className="p-5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50">
+                  <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">Retorno Fiscal IRPF (Hacienda)</span>
+                  <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">
+                    {esViviendaHabitual ? `+${formatCurrency(escenarioResult.desgravacionHacienda?.ahorroFiscalAnual || 0)}` : '0,00 €'}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    {esViviendaHabitual 
+                      ? `Deducción del ${escenarioResult.desgravacionHacienda?.tipoDeduccionPct || 18}% sobre ${formatCurrency(escenarioResult.desgravacionHacienda?.baseComputable || 0)} aportados` 
+                      : 'Préstamo no deducible en IRPF'}
+                  </p>
+                </div>
+
+                {/* Saldo Restante tras Aportación */}
+                <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                  <span className="text-xs font-semibold text-slate-500">Nuevo Saldo Vivo Pendiente</span>
+                  <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">
+                    {formatCurrency(escenarioResult.simulado.capitalPendiente)}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Tras amortizar {formatCurrency(amortizacionExtra)}
+                  </p>
+                </div>
+
               </div>
 
-              {/* Impacto en Tiempo o Cuota */}
-              <div className="p-5 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/50">
-                <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">
-                  {modalidadAmort === 'reducir_plazo' ? 'Tiempo Adelantado' : 'Nueva Cuota Mensual'}
-                </span>
-                <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
-                  {modalidadAmort === 'reducir_plazo' 
-                    ? `-${escenarioResult.simulado.mesesAhorrados} meses (${escenarioResult.simulado.anosAhorrados} años)` 
-                    : formatCurrency(escenarioResult.simulado.cuotaMensual)}
-                </p>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  {modalidadAmort === 'reducir_plazo' 
-                    ? `Finaliza en ${escenarioResult.simulado.mesesRestantes} meses en vez de ${escenarioResult.original.mesesRestantes}` 
-                    : `Ahorro mensual de +${formatCurrency(escenarioResult.simulado.ahorroCuotaMensual)}/mes`}
-                </p>
-              </div>
+              {/* BANNER CTA: REGISTRAR Y CARGAR AMORTIZACIÓN EN CUENTA */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 text-white shadow-xl">
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <Sparkles className="w-5 h-5 text-amber-400 shrink-0" />
+                    <h4 className="text-sm sm:text-base font-black">
+                      ¿Deseas aplicar esta amortización de {formatCurrency(amortizacionExtra)} en tu banco?
+                    </h4>
+                  </div>
+                  <p className="text-xs text-indigo-200 mt-1">
+                    Se descontará el dinero de tu cuenta bancaria seleccionada, reducirá el saldo vivo de {currentSelectedPasivo?.nombre} y quedará registrado el apunte contable.
+                  </p>
+                </div>
 
-              {/* Devolución Hacienda IRPF */}
-              <div className="p-5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50">
-                <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">Retorno Fiscal IRPF (Hacienda)</span>
-                <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">
-                  {esViviendaHabitual ? `+${formatCurrency(escenarioResult.desgravacionHacienda?.ahorroFiscalAnual || 0)}` : '0,00 €'}
-                </p>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  {esViviendaHabitual 
-                    ? `Deducción del ${escenarioResult.desgravacionHacienda?.tipoDeduccionPct || 18}% sobre ${formatCurrency(escenarioResult.desgravacionHacienda?.baseComputable || 0)} aportados` 
-                    : 'Préstamo no deducible en IRPF'}
-                </p>
+                <button
+                  type="button"
+                  disabled={amortizacionExtra <= 0 || !currentSelectedPasivo || amortizacionExtra > currentSelectedPasivo.capital_pendiente}
+                  onClick={() => {
+                    setAmortForm({
+                      cuentaId: cuentas[0]?.id || '',
+                      fecha: new Date().toISOString().split('T')[0],
+                      notas: `Amortización extraordinaria de ${formatCurrency(amortizacionExtra)} en ${currentSelectedPasivo?.nombre}`
+                    });
+                    setIsAmortModalOpen(true);
+                  }}
+                  className="flex items-center justify-center space-x-2 px-5 py-3 rounded-xl text-xs sm:text-sm font-black bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/30 transition-all shrink-0 disabled:opacity-50"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>⚡ Registrar Amortización en Cuenta</span>
+                </button>
               </div>
-
-              {/* Saldo Restante tras Aportación */}
-              <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-                <span className="text-xs font-semibold text-slate-500">Nuevo Saldo Vivo Pendiente</span>
-                <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">
-                  {formatCurrency(escenarioResult.simulado.capitalPendiente)}
-                </p>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Tras amortizar {formatCurrency(amortizacionExtra)}
-                </p>
-              </div>
-
             </div>
           )}
 
@@ -2422,6 +2525,135 @@ export default function SimulatorView() {
           pasivoNombre={selectedCuadroPasivo.nombre}
           onClose={() => setSelectedCuadroPasivo(null)}
         />
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL DE CONFIRMACIÓN Y CARGO DE AMORTIZACIÓN EN CUENTA */}
+      {/* ======================================================== */}
+      {isAmortModalOpen && currentSelectedPasivo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl">
+                  <Zap className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    Aplicar Amortización Extraordinaria
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {currentSelectedPasivo.nombre}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAmortModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Resumen del Cargo */}
+            <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60">
+              <div>
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Importe a Descontar</span>
+                <p className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
+                  {formatCurrency(amortizacionExtra)}
+                </p>
+              </div>
+              <div>
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Modalidad</span>
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-1">
+                  {modalidadAmort === 'reducir_plazo' ? 'Reducción de Plazo' : 'Reducción de Cuota'}
+                </p>
+              </div>
+              <div>
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Nuevo Saldo Deuda</span>
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                  {formatCurrency(Math.max(0, currentSelectedPasivo.capital_pendiente - amortizacionExtra))}
+                </p>
+              </div>
+              <div>
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  {modalidadAmort === 'reducir_plazo' ? 'Ahorro Tiempo' : 'Nueva Cuota'}
+                </span>
+                <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">
+                  {modalidadAmort === 'reducir_plazo'
+                    ? `-${escenarioResult?.simulado?.mesesAhorrados || 0} meses`
+                    : formatCurrency(escenarioResult?.simulado?.cuotaMensual || 0)}
+                </p>
+              </div>
+            </div>
+
+            {/* Selector de Cuenta Bancaria */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Cuenta Bancaria de Origen
+              </label>
+              <select
+                value={amortForm.cuentaId}
+                onChange={(e) => setAmortForm(prev => ({ ...prev, cuentaId: e.target.value }))}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+              >
+                {cuentas.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre} ({formatCurrency(c.saldo_actual || 0)})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Fecha del movimiento */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Fecha de la Operación
+              </label>
+              <input
+                type="date"
+                value={amortForm.fecha}
+                onChange={(e) => setAmortForm(prev => ({ ...prev, fecha: e.target.value }))}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+
+            {/* Concepto / Notas */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Concepto / Notas del Movimiento
+              </label>
+              <input
+                type="text"
+                value={amortForm.notas}
+                onChange={(e) => setAmortForm(prev => ({ ...prev, notas: e.target.value }))}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                placeholder="Ej. Amortización extraordinaria..."
+              />
+            </div>
+
+            {/* Acciones */}
+            <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsAmortModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={handleConfirmAmortizacion}
+                className="flex items-center space-x-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/25 transition-all disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                <span>Confirmar y Descontar</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

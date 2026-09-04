@@ -240,6 +240,82 @@ router.get('/simulador-furgoneta', (req, res) => {
   }
 });
 
+// Registrar Amortización Anticipada Extraordinaria vinculada a Cuenta Bancaria
+router.post('/:id/registrar-amortizacion', (req, res) => {
+  try {
+    const pasivoId = parseInt(req.params.id);
+    const {
+      cuentaId,
+      importe,
+      fecha = new Date().toISOString().split('T')[0],
+      modalidad = 'reducir_plazo',
+      nuevaCuota = null,
+      notas = ''
+    } = req.body;
+
+    const pasivo = db.prepare('SELECT * FROM prestamos_y_pasivos WHERE id = ?').get(pasivoId);
+    if (!pasivo) {
+      return res.status(404).json({ error: 'Pasivo / Préstamo no encontrado' });
+    }
+
+    const monto = parseFloat(importe);
+    if (isNaN(monto) || monto <= 0) {
+      return res.status(400).json({ error: 'El importe a amortizar debe ser superior a 0 €' });
+    }
+
+    const nuevoSaldo = Math.max(0, Number((pasivo.capital_pendiente - monto).toFixed(2)));
+    let finalCuota = pasivo.cuota_mensual;
+    if (modalidad === 'reducir_cuota' && nuevaCuota && parseFloat(nuevaCuota) > 0) {
+      finalCuota = parseFloat(nuevaCuota);
+    }
+
+    // 1. Actualizar el saldo vivo y la cuota del pasivo
+    db.prepare(`
+      UPDATE prestamos_y_pasivos
+      SET capital_pendiente = ?,
+          cuota_mensual = ?,
+          fecha_actualizacion_saldo = ?
+      WHERE id = ?
+    `).run(nuevoSaldo, finalCuota, fecha, pasivoId);
+
+    // 2. Buscar categoría adecuada (Vivienda / Hipoteca / Préstamos) o defecto
+    let cat = db.prepare("SELECT id FROM categorias WHERE LOWER(nombre) LIKE '%hipoteca%' OR LOWER(nombre) LIKE '%prestamo%' OR LOWER(nombre) LIKE '%vivienda%' LIMIT 1").get();
+    const catId = cat ? cat.id : 1;
+
+    // 3. Crear apunte bancario en movimientos
+    const cId = parseInt(cuentaId) || 1;
+    const descModalidad = modalidad === 'reducir_plazo' ? 'Reducción de Plazo' : 'Reducción de Cuota';
+    const concepto = `Amortización Anticipada: ${pasivo.nombre} (${descModalidad})`;
+    const notaCompleta = notas 
+      ? `${notas} | Amortización de ${monto.toLocaleString('es-ES')} € en ${pasivo.nombre}. Saldo resultante: ${nuevoSaldo.toLocaleString('es-ES')} €`
+      : `Amortización extraordinaria de ${monto.toLocaleString('es-ES')} € en ${pasivo.nombre}. Saldo resultante: ${nuevoSaldo.toLocaleString('es-ES')} €`;
+
+    db.prepare(`
+      INSERT INTO movimientos (
+        cuenta_id, categoria_id, fecha, concepto, importe,
+        es_transferencia_interna, es_consolidado, etiqueta_especial, notas, usuario_id
+      ) VALUES (?, ?, ?, ?, ?, 0, 1, 'Amortización Extraordinaria', ?, 1)
+    `).run(
+      cId,
+      catId,
+      fecha,
+      concepto,
+      -monto,
+      notaCompleta
+    );
+
+    res.json({
+      success: true,
+      message: `¡Amortización de ${monto.toLocaleString('es-ES')} € registrada con éxito y cargada en la cuenta bancaria!`,
+      nuevoSaldo,
+      nuevaCuota: finalCuota,
+      pasivoId
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Crear nuevo pasivo
 router.post('/', (req, res) => {
   try {

@@ -251,6 +251,19 @@ export const api = {
     return res.json();
   },
 
+  async registrarAmortizacionAnticipada(pasivoId, data) {
+    const res = await fetch(`${API_BASE}/pasivos/${pasivoId}/registrar-amortizacion`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al registrar amortización anticipada');
+    }
+    return res.json();
+  },
+
   async simularEscenarioPasivo(data) {
     const res = await fetch(`${API_BASE}/pasivos/simular-escenario`, {
       method: 'POST',
