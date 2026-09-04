@@ -188,6 +188,7 @@ export default function SimulatorView() {
         notas: amortForm.notas
       });
       setIsAmortModalOpen(false);
+      setAmortizacionExtra(0);
       toast.success(res.message || 'Amortización registrada con éxito y descontada de la cuenta', 'Amortización Anticipada');
       await loadPasivos();
     } catch (err) {
@@ -2041,7 +2042,7 @@ export default function SimulatorView() {
                         {formatCurrency(p.cuota_mensual)}
                       </strong>
                       <span className="text-[10px] text-slate-400 block mt-0.5">
-                        Restan ~{p.mesesRestantes || 60} meses
+                        Restan {p.mesesRestantes || 0} meses {p.mesesRestantes > 0 && `(${Math.floor(p.mesesRestantes / 12)}a ${p.mesesRestantes % 12}m)`}
                       </span>
                     </div>
 

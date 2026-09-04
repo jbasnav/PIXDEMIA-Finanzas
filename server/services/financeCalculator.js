@@ -811,10 +811,42 @@ function calcularCuadroVidaCompleta(pasivo) {
     totalPagadoVida: Number((totalAmortizadoVida + totalInteresesVida).toFixed(2)),
     interesesPagadosHastaHoy: Number(interesesPagadosHastaHoy.toFixed(2)),
     interesesPendientes: Number((totalInteresesVida - interesesPagadosHastaHoy).toFixed(2)),
-    sinInteres,
     resumenAnual,
     scheduleMensual
   };
+}
+
+/**
+ * Calcula el número exacto de meses restantes según sistema de amortización francés / directo
+ */
+function computeExactRemainingMonths(capital, interesAnual, cuotaMensual) {
+  const cap = Math.max(0, Number(capital) || 0);
+  const cuota = Math.max(0, Number(cuotaMensual) || 0);
+  const intVal = Number(interesAnual) || 0;
+  if (cap <= 0 || cuota <= 0) return 0;
+  const tasaMensual = (intVal / 100) / 12;
+  if (tasaMensual === 0) {
+    return Math.ceil(cap / cuota);
+  }
+  const numerador = 1 - (cap * tasaMensual / cuota);
+  if (numerador <= 0) {
+    return 360;
+  }
+  return Math.max(1, Math.ceil(-Math.log(numerador) / Math.log(1 + tasaMensual)));
+}
+
+/**
+ * Calcula la fecha fin prevista sumando N meses a una fecha base (YYYY-MM-DD)
+ */
+function computeFechaFinFromDate(baseDateStr, months) {
+  if (months <= 0) return baseDateStr;
+  const base = baseDateStr ? new Date(baseDateStr) : new Date();
+  const d = isNaN(base.getTime()) ? new Date() : base;
+  const target = new Date(d.getFullYear(), d.getMonth() + months, d.getDate());
+  const y = target.getFullYear();
+  const m = String(target.getMonth() + 1).padStart(2, '0');
+  const day = String(target.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 module.exports = {
@@ -823,6 +855,8 @@ module.exports = {
   simularEscenarioPasivo,
   simularPrestamoFurgoneta,
   simularNuevoCreditoEImpactoGlobal,
-  calcularCuadroVidaCompleta
+  calcularCuadroVidaCompleta,
+  computeExactRemainingMonths,
+  computeFechaFinFromDate
 };
 

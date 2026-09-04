@@ -4,7 +4,9 @@ const db = require('../db');
 const { 
   calcularAmortizacion, 
   simularEscenarioPasivo, 
-  simularPrestamoFurgoneta 
+  simularPrestamoFurgoneta,
+  computeExactRemainingMonths,
+  computeFechaFinFromDate
 } = require('../services/financeCalculator');
 const { 
   generarHistorialEuriborCompleto, 
@@ -54,10 +56,9 @@ router.get('/', (req, res) => {
     `).all();
 
     const conAmortizacion = pasivos.map(p => {
-      let mesesRestantes = 60;
-      if (p.cuota_mensual > 0) {
-        mesesRestantes = Math.ceil(p.capital_pendiente / p.cuota_mensual);
-      }
+      const intVal = p.tipo_interes_modalidad === 'cero' ? 0 : (Number(p.interes_nominal_anual) || 0);
+      let mesesRestantes = computeExactRemainingMonths(p.capital_pendiente, intVal, p.cuota_mensual);
+      if (!mesesRestantes || isNaN(mesesRestantes)) mesesRestantes = 0;
 
       let historialIntereses = [];
       try {
@@ -267,18 +268,28 @@ router.post('/:id/registrar-amortizacion', (req, res) => {
 
     const nuevoSaldo = Math.max(0, Number((pasivo.capital_pendiente - monto).toFixed(2)));
     let finalCuota = pasivo.cuota_mensual;
+    let finalFechaFin = pasivo.fecha_fin_prevista;
+
+    const intVal = pasivo.tipo_interes_modalidad === 'cero' ? 0 : (Number(pasivo.interes_nominal_anual) || 0);
+
     if (modalidad === 'reducir_cuota' && nuevaCuota && parseFloat(nuevaCuota) > 0) {
       finalCuota = parseFloat(nuevaCuota);
+    } else if (modalidad === 'reducir_plazo') {
+      // Recalcular meses restantes y nueva fecha fin prevista exacta a partir de la fecha de amortización
+      const nuevoMesesRest = computeExactRemainingMonths(nuevoSaldo, intVal, finalCuota);
+      const baseDate = fecha || new Date().toISOString().split('T')[0];
+      finalFechaFin = computeFechaFinFromDate(baseDate, nuevoMesesRest) || pasivo.fecha_fin_prevista;
     }
 
-    // 1. Actualizar el saldo vivo y la cuota del pasivo
+    // 1. Actualizar el saldo vivo, cuota y fecha de fin prevista del pasivo
     db.prepare(`
       UPDATE prestamos_y_pasivos
       SET capital_pendiente = ?,
           cuota_mensual = ?,
+          fecha_fin_prevista = ?,
           fecha_actualizacion_saldo = ?
       WHERE id = ?
-    `).run(nuevoSaldo, finalCuota, fecha, pasivoId);
+    `).run(nuevoSaldo, finalCuota, finalFechaFin, fecha, pasivoId);
 
     // 2. Buscar categoría adecuada (Vivienda / Hipoteca / Préstamos) o defecto
     let cat = db.prepare("SELECT id FROM categorias WHERE LOWER(nombre) LIKE '%hipoteca%' OR LOWER(nombre) LIKE '%prestamo%' OR LOWER(nombre) LIKE '%vivienda%' LIMIT 1").get();
